@@ -1,7 +1,7 @@
 // js/api.js
 
-// Using relative path to let Vite Proxy handle routing (fixes CORS and HTML fallback issues)
-const BASE_URL = '/api';
+// Using absolute path so it works with Live Server (127.0.0.1:5500) directly without Vite proxy
+const BASE_URL = 'http://localhost:3001/api';
 
 // Core fetch function — automatically adds the login token
 async function request(path, options = {}) {
