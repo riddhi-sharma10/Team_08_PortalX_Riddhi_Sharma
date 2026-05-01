@@ -45,19 +45,27 @@ async function fetchRecords(container) {
         allRecords = [];
         availableYears = [];
     }
+    
+    // Ensure 2024, 2025, 2026 are always available for the filter dropdown
+    const requiredYears = [2026, 2025, 2024];
+    requiredYears.forEach(y => {
+        if (!availableYears.includes(y)) availableYears.push(y);
+    });
+    availableYears.sort((a, b) => b - a);
 }
 
 function renderPage(container, app) {
     const filteredRecords = getFilteredRecords(allRecords);
     const statusSummary = getStatusSummary(allRecords);
     const departmentOptions = Array.from(new Set(allRecords.map((record) => record.department)));
+    const placedRecords = allRecords.filter(r => r.status === 'Placed');
     const placementRate = getPlacementRate(allRecords);
-    const highestPackage = getHighestPackage(allRecords);
+    const highestPackage = getHighestPackage(placedRecords);
     const topRecruiter = getTopRecruiter(allRecords);
-    const totalPlaced = allRecords.filter(r => r.status === 'Placed').length;
+    const totalPlaced = placedRecords.length;
     const totalOffers = allRecords.length;
     const uniqueCompanies = new Set(allRecords.map(r => r.company)).size;
-    const avgPackage = allRecords.length ? (allRecords.reduce((s, r) => s + r.packageLpa, 0) / allRecords.length).toFixed(1) : '0.0';
+    const avgPackage = placedRecords.length ? (placedRecords.reduce((s, r) => s + r.packageLpa, 0) / placedRecords.length).toFixed(1) : '0.0';
 
     const yearsOptions = ['all', ...availableYears].map(yr => {
         const label = yr === 'all' ? 'All Time' : yr;
@@ -70,7 +78,6 @@ function renderPage(container, app) {
             <div class="admin-dashboard-header admin-records-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
                     <h1>Placement Records</h1>
-                    <p>Live placement data from the database — filtered by status and department.</p>
                 </div>
                 <div>
                     <label style="font-size: 0.9rem; font-weight: 500; color: #64748b; margin-right: 8px;">Filter by Year:</label>

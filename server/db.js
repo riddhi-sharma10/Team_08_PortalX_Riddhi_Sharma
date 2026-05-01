@@ -1,9 +1,10 @@
 // server/db.js
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 
-dotenv.config({ path: '../.env' });
-dotenv.config(); // fallback to server/.env if present
+dotenv.config({ path: fileURLToPath(new URL('./.env', import.meta.url)) }); // load server/.env first (Aiven) if present
+dotenv.config({ path: '../.env' }); // fallback to root .env if present
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST,

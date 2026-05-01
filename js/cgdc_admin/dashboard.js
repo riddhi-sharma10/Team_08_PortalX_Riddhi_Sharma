@@ -494,13 +494,17 @@ function fmt(n) {
 }
 
 function statusTag(s) {
-  if (s === "placed") return "tag-info";
+  if (s === "placed") return "tag-success";
   if (s === "in-progress") return "tag-warning";
   if (s === "rejected") return "tag-danger";
+  if (s === "opted_out") return "tag-info";
+  if (s === "not_eligible") return "tag-danger";
   return "tag-info";
 }
 
 function statusLabel(s) {
   if (s === "in-progress") return "IN PROGRESS";
+  if (s === "opted_out") return "OPTED OUT";
+  if (s === "not_eligible") return "NOT ELIGIBLE";
   return String(s).toUpperCase();
 }

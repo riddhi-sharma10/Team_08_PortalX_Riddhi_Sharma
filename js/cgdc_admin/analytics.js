@@ -44,6 +44,14 @@ async function fetchAnalytics() {
       availableYears: []
     };
   }
+  
+  if (analyticsData && analyticsData.availableYears) {
+      const requiredYears = [2026, 2025, 2024];
+      requiredYears.forEach(y => {
+          if (!analyticsData.availableYears.includes(y)) analyticsData.availableYears.push(y);
+      });
+      analyticsData.availableYears.sort((a, b) => b - a);
+  }
 }
 
 function renderUi(container, app) {

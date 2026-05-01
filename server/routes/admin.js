@@ -48,6 +48,7 @@ router.get('/dashboard', async (req, res) => {
             WHERE a.status IN ('selected')
             GROUP BY COALESCE(s.dept, 'Unknown')
             ORDER BY placed DESC
+            LIMIT 3
         `);
 
         const [topCompanies] = await pool.query(`
@@ -62,23 +63,57 @@ router.get('/dashboard', async (req, res) => {
         `);
 
         const [records] = await pool.query(`
-            SELECT s.s_name AS student,
-                   COALESCE(s.dept, 'Unknown') AS department,
-                   COALESCE(c.comp_name, '-') AS company,
-                   COALESCE(j.package, 0) AS packageLpa,
-                   a.status
-            FROM APPLICATION a
-            JOIN STUDENT s ON s.s_id = a.s_id
-            LEFT JOIN JOB_PROFILE j ON j.job_id = a.job_id
-            LEFT JOIN COMPANY c ON c.comp_id = j.comp_id
-            ORDER BY a.applied_date DESC
+            SELECT 
+                s.s_name AS student, 
+                COALESCE(s.dept, 'Unknown') AS department,
+                CASE 
+                    WHEN s.profile_status = 'opted_out' THEN '-'
+                    WHEN best_pr.comp_id IS NOT NULL THEN COALESCE(c.comp_name, '-')
+                    WHEN latest_app.job_id IS NOT NULL THEN COALESCE(ac.comp_name, '-')
+                    ELSE '-'
+                END AS company,
+                CASE 
+                    WHEN s.profile_status = 'opted_out' THEN 0
+                    WHEN best_pr.comp_id IS NOT NULL THEN best_pr.salary_offered
+                    WHEN latest_app.job_id IS NOT NULL THEN COALESCE(aj.package, 0)
+                    ELSE 0
+                END AS packageLpa,
+                CASE 
+                    WHEN s.profile_status = 'opted_out' THEN 'opted_out'
+                    WHEN s.profile_status = 'not_eligible' THEN 'not_eligible'
+                    WHEN best_pr.record_id IS NOT NULL THEN 'placed'
+                    WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'in-progress'
+                    WHEN latest_app.status = 'rejected' THEN 'rejected'
+                    ELSE 'active'
+                END AS status
+            FROM STUDENT s
+            LEFT JOIN (
+                SELECT pr1.* 
+                FROM PLACEMENT_RECORD pr1
+                JOIN (
+                    SELECT s_id, MAX(record_id) as max_id 
+                    FROM PLACEMENT_RECORD GROUP BY s_id
+                ) pr2 ON pr1.s_id = pr2.s_id AND pr1.record_id = pr2.max_id
+            ) best_pr ON s.s_id = best_pr.s_id
+            LEFT JOIN COMPANY c ON best_pr.comp_id = c.comp_id
+            LEFT JOIN (
+                SELECT a1.* 
+                FROM APPLICATION a1
+                JOIN (
+                    SELECT s_id, MAX(app_id) as max_id 
+                    FROM APPLICATION GROUP BY s_id
+                ) a2 ON a1.s_id = a2.s_id AND a1.app_id = a2.max_id
+            ) latest_app ON s.s_id = latest_app.s_id AND best_pr.record_id IS NULL
+            LEFT JOIN JOB_PROFILE aj ON latest_app.job_id = aj.job_id
+            LEFT JOIN COMPANY ac ON aj.comp_id = ac.comp_id
+            ORDER BY COALESCE(best_pr.academic_year, s.graduation_yr) DESC, s.s_id DESC
             LIMIT 50
         `);
 
         const totalStudents = Number(students[0]?.count || 0);
         const totalPlaced = Number(offers[0]?.count || 0);
         const totalRawOffers = Number(totalJobOffers[0]?.count || 0);
-        
+
         let placementPct = 0;
         if (totalStudents > 0) {
             placementPct = Math.min(100, (totalPlaced / totalStudents) * 100);
@@ -175,7 +210,7 @@ router.get('/companies', async (req, res) => {
             LEFT JOIN JOB_PROFILE j ON j.comp_id = c.comp_id
             LEFT JOIN APPLICATION a ON a.job_id = j.job_id
             GROUP BY c.comp_id, c.comp_name, c.industry_type, c.tier, 'active'
-            ORDER BY c.comp_id ASC
+            ORDER BY c.comp_name ASC
         `);
 
         const q = String(query).toLowerCase();
@@ -189,38 +224,77 @@ router.get('/companies', async (req, res) => {
 router.get('/records', async (req, res) => {
     try {
         const { status = 'all', department = 'all', query = '', year = 'all' } = req.query;
-        
         let sql = `
-            SELECT a.app_id AS id, s.s_name AS student, COALESCE(s.dept, 'Unknown') AS department, 
-                   COALESCE(c.comp_name, '-') AS company, COALESCE(j.package, 0) AS packageLpa, 
-                   COALESCE(a.status, 'Applied') AS status, YEAR(a.applied_date) AS appliedYear
-            FROM APPLICATION a
-            JOIN STUDENT s ON s.s_id = a.s_id
-            LEFT JOIN JOB_PROFILE j ON j.job_id = a.job_id
-            LEFT JOIN COMPANY c ON c.comp_id = j.comp_id
+            SELECT 
+                s.s_id AS id, 
+                s.s_name AS student, 
+                COALESCE(s.dept, 'Unknown') AS department,
+                CASE 
+                    WHEN s.profile_status = 'opted_out' THEN '-'
+                    WHEN best_pr.comp_id IS NOT NULL THEN COALESCE(c.comp_name, '-')
+                    WHEN latest_app.job_id IS NOT NULL THEN COALESCE(ac.comp_name, '-')
+                    ELSE '-'
+                END AS company,
+                CASE 
+                    WHEN s.profile_status = 'opted_out' THEN 0
+                    WHEN best_pr.comp_id IS NOT NULL THEN best_pr.salary_offered
+                    WHEN latest_app.job_id IS NOT NULL THEN COALESCE(aj.package, 0)
+                    ELSE 0
+                END AS packageLpa,
+                CASE 
+                    WHEN s.profile_status = 'opted_out' THEN 'Opted Out'
+                    WHEN s.profile_status = 'not_eligible' THEN 'Not Eligible'
+                    WHEN best_pr.record_id IS NOT NULL THEN 'Placed'
+                    WHEN latest_app.status IN ('under_review', 'shortlisted') THEN 'In Progress'
+                    WHEN latest_app.status = 'rejected' THEN 'Rejected'
+                    WHEN latest_app.status = 'applied' THEN 'In Progress'
+                    ELSE 'Active'
+                END AS status,
+                s.graduation_yr AS appliedYear
+            FROM STUDENT s
+            LEFT JOIN (
+                SELECT pr1.* 
+                FROM PLACEMENT_RECORD pr1
+                JOIN (
+                    SELECT s_id, MAX(record_id) as max_id 
+                    FROM PLACEMENT_RECORD GROUP BY s_id
+                ) pr2 ON pr1.s_id = pr2.s_id AND pr1.record_id = pr2.max_id
+            ) best_pr ON s.s_id = best_pr.s_id
+            LEFT JOIN COMPANY c ON best_pr.comp_id = c.comp_id
+            LEFT JOIN (
+                SELECT a1.* 
+                FROM APPLICATION a1
+                JOIN (
+                    SELECT s_id, MAX(app_id) as max_id 
+                    FROM APPLICATION GROUP BY s_id
+                ) a2 ON a1.s_id = a2.s_id AND a1.app_id = a2.max_id
+            ) latest_app ON s.s_id = latest_app.s_id AND best_pr.record_id IS NULL
+            LEFT JOIN JOB_PROFILE aj ON latest_app.job_id = aj.job_id
+            LEFT JOIN COMPANY ac ON aj.comp_id = ac.comp_id
         `;
         const params = [];
         if (year !== 'all') {
-            sql += ` WHERE YEAR(a.applied_date) = ? `;
+            sql += ` WHERE s.graduation_yr = ? `;
             params.push(Number(year));
         }
-        sql += ` ORDER BY a.applied_date DESC `;
+        sql += ` ORDER BY s.graduation_yr DESC, id DESC `;
 
         const [rows] = await pool.query(sql, params);
 
         const q = String(query).toLowerCase();
-        const filtered = rows.filter((row) => (!q || [row.student, row.department, row.company, row.status].join(' ').toLowerCase().includes(q)) && (status === 'all' || normalizeStatus(row.status) === status) && (department === 'all' || row.department === department)).map((row) => ({ ...row, initials: String(row.student || '').split(' ').slice(0, 2).map((part) => part.charAt(0)).join('').toUpperCase(), packageLpa: Number(row.packageLpa || 0), status: normalizeStatus(row.status) }));
-
+        
         // Fetch available years
         const [yearsRes] = await pool.query(`
             SELECT DISTINCT YEAR(applied_date) AS yr FROM APPLICATION WHERE applied_date IS NOT NULL
             UNION
             SELECT DISTINCT graduation_yr AS yr FROM STUDENT WHERE graduation_yr IS NOT NULL
+            UNION
+            SELECT DISTINCT academic_year AS yr FROM PLACEMENT_RECORD WHERE academic_year IS NOT NULL
             ORDER BY yr DESC
         `);
         const availableYears = yearsRes.map((r) => r.yr);
 
-        res.json({ rows: filtered, availableYears });
+        res.json({ rows: rows.filter((row) => (!q || [row.student, row.department, row.company, row.status].join(' ').toLowerCase().includes(q)) && (status === 'all' || normalizeStatus(row.status) === status) && (department === 'all' || row.department === department)).map((row) => ({ ...row, initials: String(row.student || '').split(' ').slice(0, 2).map((part) => part.charAt(0)).join('').toUpperCase(), packageLpa: Number(row.packageLpa || 0), status: normalizeStatus(row.status) })), availableYears });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Error fetching admin records' });
@@ -229,58 +303,39 @@ router.get('/records', async (req, res) => {
 
 router.get('/analytics', async (req, res) => {
     try {
-        const { year = '2026' } = req.query;
-        console.log(`>>> ANALYTICS API HIT [YEAR: ${year}]`);
-        
-        let appAnd = '';
+        const { year = 'all' } = req.query;
+        const appParams = [];
         let studentWhere = '';
         let appFilterOnlyWhere = '';
-        const appParams = [];
+        let prAnd = '';
         
         if (year !== 'all') {
-            appAnd = 'AND YEAR(a.applied_date) = ?';
             studentWhere = 'WHERE s.graduation_yr = ?';
             appFilterOnlyWhere = 'WHERE YEAR(applied_date) = ?';
+            prAnd = 'WHERE academic_year = ?';
             appParams.push(Number(year));
         }
 
         // KPIs
         const [students] = await pool.query(`SELECT COUNT(*) AS count FROM STUDENT s ${studentWhere}`, appParams);
         const [applications] = await pool.query(`SELECT COUNT(*) AS count FROM APPLICATION ${appFilterOnlyWhere}`, appParams);
-        const [placed] = await pool.query(`SELECT COUNT(DISTINCT s_id) AS count FROM APPLICATION a WHERE a.status IN ('selected') ${appAnd}`, appParams);
-        const [maxPkg] = await pool.query(`SELECT MAX(j.package) AS val FROM APPLICATION a JOIN JOB_PROFILE j ON j.job_id = a.job_id WHERE a.status IN ('selected') ${appAnd}`, appParams);
-        const [avgPkg] = await pool.query(`SELECT AVG(j.package) AS val FROM APPLICATION a JOIN JOB_PROFILE j ON j.job_id = a.job_id WHERE a.status IN ('selected') ${appAnd}`, appParams);
+        const [placed] = await pool.query(`SELECT COUNT(DISTINCT s_id) AS count FROM PLACEMENT_RECORD ${prAnd}`, appParams);
+        const [maxPkg] = await pool.query(`SELECT MAX(salary_offered) AS val FROM PLACEMENT_RECORD ${prAnd}`, appParams);
+        const [avgPkg] = await pool.query(`SELECT AVG(salary_offered) AS val FROM PLACEMENT_RECORD ${prAnd}`, appParams);
 
         const totalStudents = Number(students[0]?.count || 0);
         const totalPlaced = Number(placed[0]?.count || 0);
         const placementRate = totalStudents ? ((totalPlaced / totalStudents) * 100) : 0;
 
-        // Salary distribution buckets (overall for selected year)
+        // Salary distribution buckets
         const [salaryBuckets] = await pool.query(`
             SELECT
-                SUM(CASE WHEN j.package < 5 THEN 1 ELSE 0 END) AS below5,
-                SUM(CASE WHEN j.package >= 5 AND j.package < 10 THEN 1 ELSE 0 END) AS range5to10,
-                SUM(CASE WHEN j.package >= 10 AND j.package < 20 THEN 1 ELSE 0 END) AS range10to20,
-                SUM(CASE WHEN j.package >= 20 THEN 1 ELSE 0 END) AS above20
-            FROM APPLICATION a
-            JOIN JOB_PROFILE j ON j.job_id = a.job_id
-            WHERE a.status IN ('selected') ${appAnd}
-        `, appParams);
-
-        // Salary distribution BY BRANCH
-        const [salaryByBranch] = await pool.query(`
-            SELECT
-                COALESCE(s.dept, 'Unknown') AS dept,
-                SUM(CASE WHEN j.package < 5 THEN 1 ELSE 0 END) AS below5,
-                SUM(CASE WHEN j.package >= 5 AND j.package < 10 THEN 1 ELSE 0 END) AS range5to10,
-                SUM(CASE WHEN j.package >= 10 AND j.package < 20 THEN 1 ELSE 0 END) AS range10to20,
-                SUM(CASE WHEN j.package >= 20 THEN 1 ELSE 0 END) AS above20
-            FROM APPLICATION a
-            JOIN JOB_PROFILE j ON j.job_id = a.job_id
-            JOIN STUDENT s ON s.s_id = a.s_id
-            WHERE a.status IN ('selected') ${appAnd}
-            GROUP BY COALESCE(s.dept, 'Unknown')
-            ORDER BY dept
+                SUM(CASE WHEN salary_offered < 5 THEN 1 ELSE 0 END) AS below5,
+                SUM(CASE WHEN salary_offered >= 5 AND salary_offered < 10 THEN 1 ELSE 0 END) AS range5to10,
+                SUM(CASE WHEN salary_offered >= 10 AND salary_offered < 20 THEN 1 ELSE 0 END) AS range10to20,
+                SUM(CASE WHEN salary_offered >= 20 THEN 1 ELSE 0 END) AS above20
+            FROM PLACEMENT_RECORD
+            ${prAnd}
         `, appParams);
 
         // Department placement percentages
@@ -288,11 +343,10 @@ router.get('/analytics', async (req, res) => {
             SELECT
                 COALESCE(s.dept, 'Unknown') AS name,
                 COUNT(DISTINCT s.s_id) AS totalStudents,
-                COUNT(DISTINCT CASE WHEN a.status IN ('selected') THEN a.s_id END) AS placedCount,
-                AVG(CASE WHEN a.status IN ('selected') THEN j.package ELSE NULL END) AS avgLpa
+                COUNT(DISTINCT pr.s_id) AS placedCount,
+                AVG(pr.salary_offered) AS avgLpa
             FROM STUDENT s
-            LEFT JOIN APPLICATION a ON a.s_id = s.s_id ${appAnd}
-            LEFT JOIN JOB_PROFILE j ON j.job_id = a.job_id
+            LEFT JOIN PLACEMENT_RECORD pr ON pr.s_id = s.s_id ${prAnd.replace('WHERE', 'AND pr.')}
             ${studentWhere}
             GROUP BY COALESCE(s.dept, 'Unknown')
             ORDER BY placedCount DESC
@@ -300,18 +354,43 @@ router.get('/analytics', async (req, res) => {
 
         // Monthly application and offer trends
         const [monthlyTrend] = await pool.query(`
-            SELECT
-                DATE_FORMAT(applied_date, '%b') AS label,
-                MONTH(applied_date) AS monthIdx,
-                COUNT(*) AS applications,
-                SUM(CASE WHEN status IN ('selected') THEN 1 ELSE 0 END) AS offers
-            FROM APPLICATION
-            WHERE applied_date IS NOT NULL ${year !== 'all' ? 'AND YEAR(applied_date) = ?' : ''}
-            GROUP BY MONTH(applied_date), DATE_FORMAT(applied_date, '%b')
+            SELECT 
+                COALESCE(app_months.monthIdx, offer_months.monthIdx) AS monthIdx,
+                COALESCE(app_months.label, offer_months.label) AS label,
+                COALESCE(app_months.applications, 0) AS applications,
+                COALESCE(offer_months.offers, 0) AS offers
+            FROM (
+                SELECT MONTH(applied_date) AS monthIdx, DATE_FORMAT(applied_date, '%b') AS label, COUNT(*) AS applications
+                FROM APPLICATION
+                WHERE applied_date IS NOT NULL ${year !== 'all' ? 'AND YEAR(applied_date) = ?' : ''}
+                GROUP BY MONTH(applied_date), DATE_FORMAT(applied_date, '%b')
+            ) app_months
+            LEFT JOIN (
+                SELECT MONTH(recorded_on) AS monthIdx, DATE_FORMAT(recorded_on, '%b') AS label, COUNT(*) AS offers
+                FROM PLACEMENT_RECORD
+                WHERE recorded_on IS NOT NULL ${year !== 'all' ? 'AND academic_year = ?' : ''}
+                GROUP BY MONTH(recorded_on), DATE_FORMAT(recorded_on, '%b')
+            ) offer_months ON app_months.monthIdx = offer_months.monthIdx
+            UNION
+            SELECT 
+                COALESCE(app_months.monthIdx, offer_months.monthIdx) AS monthIdx,
+                COALESCE(app_months.label, offer_months.label) AS label,
+                COALESCE(app_months.applications, 0) AS applications,
+                COALESCE(offer_months.offers, 0) AS offers
+            FROM (
+                SELECT MONTH(applied_date) AS monthIdx, DATE_FORMAT(applied_date, '%b') AS label, COUNT(*) AS applications
+                FROM APPLICATION
+                WHERE applied_date IS NOT NULL ${year !== 'all' ? 'AND YEAR(applied_date) = ?' : ''}
+                GROUP BY MONTH(applied_date), DATE_FORMAT(applied_date, '%b')
+            ) app_months
+            RIGHT JOIN (
+                SELECT MONTH(recorded_on) AS monthIdx, DATE_FORMAT(recorded_on, '%b') AS label, COUNT(*) AS offers
+                FROM PLACEMENT_RECORD
+                WHERE recorded_on IS NOT NULL ${year !== 'all' ? 'AND academic_year = ?' : ''}
+                GROUP BY MONTH(recorded_on), DATE_FORMAT(recorded_on, '%b')
+            ) offer_months ON app_months.monthIdx = offer_months.monthIdx
             ORDER BY monthIdx
-        `, appParams);
-
-        const availableYears = [2024, 2025, 2026];
+        `, year !== 'all' ? [appParams[0], appParams[0], appParams[0], appParams[0]] : []);
 
         const b = salaryBuckets[0] || {};
         const salaryDistribution = [
@@ -328,39 +407,40 @@ router.get('/analytics', async (req, res) => {
                 name: d.name,
                 placementPct: Math.round((placedN / total) * 100),
                 avgLpa: Number(Number(d.avgLpa || 0).toFixed(1)),
-                totalStudents: total,
-                placedCount: placedN
+                medianAts: 0
             };
         });
 
-        // Salary by branch formatted
-        const salaryByBranchFormatted = salaryByBranch.map((r) => ({
-            dept: r.dept,
-            below5: Number(r.below5 || 0),
-            range5to10: Number(r.range5to10 || 0),
-            range10to20: Number(r.range10to20 || 0),
-            above20: Number(r.above20 || 0)
-        }));
+        const departmentPlacement = departments.slice(0, 3).map((d) => d.placementPct);
 
         // Build insights from real data
         const topDept = departments[0];
         const insights = [];
-        if (topDept && topDept.placementPct > 0) insights.push(`${topDept.name} leads with ${topDept.placementPct}% placement rate and ₹${topDept.avgLpa} LPA avg package.`);
+        if (topDept) insights.push(`${topDept.name} leads with ${topDept.placementPct}% placement rate and ₹${topDept.avgLpa} LPA avg package.`);
         insights.push(`Overall placement rate is ${placementRate.toFixed(1)}% across ${totalStudents} students.`);
         if (salaryDistribution[3] > 0) insights.push(`${salaryDistribution[3]} offers are in the high-package bracket (> ₹20 LPA).`);
         insights.push(`Total ${Number(applications[0]?.count || 0).toLocaleString('en-IN')} applications processed this cycle.`);
+
+        // Fetch available years
+        const [yearsRes] = await pool.query(`
+            SELECT DISTINCT YEAR(applied_date) AS yr FROM APPLICATION WHERE applied_date IS NOT NULL
+            UNION
+            SELECT DISTINCT graduation_yr AS yr FROM STUDENT WHERE graduation_yr IS NOT NULL
+            UNION
+            SELECT DISTINCT academic_year AS yr FROM PLACEMENT_RECORD WHERE academic_year IS NOT NULL
+            ORDER BY yr DESC
+        `);
+        const availableYears = yearsRes.map((r) => r.yr);
 
         res.json({
             kpis: {
                 placementRate: Number(placementRate.toFixed(1)),
                 avgLpa: Number(Number(avgPkg[0]?.val || 0).toFixed(1)),
                 highestLpa: Number(Number(maxPkg[0]?.val || 0).toFixed(1)),
-                applications: Number(applications[0]?.count || 0),
-                totalStudents,
-                totalPlaced
+                applications: Number(applications[0]?.count || 0)
             },
             salaryDistribution,
-            salaryByBranch: salaryByBranchFormatted,
+            departmentPlacement,
             monthlyApplications: monthlyTrend.map((r) => Number(r.applications)),
             monthlyOffers: monthlyTrend.map((r) => Number(r.offers)),
             monthLabels: monthlyTrend.map((r) => r.label),
