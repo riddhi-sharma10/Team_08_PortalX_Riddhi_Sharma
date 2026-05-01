@@ -1772,3 +1772,30 @@ tr:hover {
     background: #f1f5f9;
     border-color: #cbd5e1;
 }
+
+/* --- Year Filter Buttons (Analytics) --- */
+.yr-filter-btn {
+    padding: 8px 18px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #64748b;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.yr-filter-btn:hover {
+    border-color: #1b3a6b;
+    color: #1b3a6b;
+    background: #f0f4f8;
+}
+
+.yr-filter-btn.active {
+    background: #1b3a6b;
+    color: #ffffff;
+    border-color: #1b3a6b;
+    box-shadow: 0 2px 8px rgba(27, 58, 107, 0.2);
+}

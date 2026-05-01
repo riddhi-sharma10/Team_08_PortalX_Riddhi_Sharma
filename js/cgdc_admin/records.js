@@ -2,27 +2,34 @@
 import { api } from '../api.js';
 
 let allRecords = [];
+let availableYears = [];
 
 const recordsState = {
     query: '',
     status: 'all',
-    department: 'all'
+    department: 'all',
+    selectedYear: 'all'
 };
 
 export async function render(container, app) {
-    // Show loading state
-    container.innerHTML = `
-        <div class="admin-dashboard-shell" style="display:flex;align-items:center;justify-content:center;min-height:400px;">
-            <div style="text-align:center;color:var(--text-muted);">
-                <ion-icon name="hourglass-outline" style="font-size:2.5rem;display:block;margin:0 auto 12px;"></ion-icon>
-                <p>Loading placement records...</p>
-            </div>
-        </div>
-    `;
+    await fetchRecords(container);
+    renderPage(container, app);
+}
 
-    // Fetch records from the API
+async function fetchRecords(container) {
+    if (container) {
+        container.innerHTML = `
+            <div class="admin-dashboard-shell" style="display:flex;align-items:center;justify-content:center;min-height:400px;">
+                <div style="text-align:center;color:var(--text-muted);">
+                    <ion-icon name="hourglass-outline" style="font-size:2.5rem;display:block;margin:0 auto 12px;"></ion-icon>
+                    <p>Loading placement records...</p>
+                </div>
+            </div>
+        `;
+    }
+
     try {
-        const data = await api.get('/admin/records');
+        const data = await api.get(`/admin/records?year=${recordsState.selectedYear}`);
         allRecords = (data?.rows || []).map(row => ({
             ...row,
             student: row.student || 'Unknown',
@@ -32,12 +39,12 @@ export async function render(container, app) {
             status: formatStatusLabel(row.status),
             initials: row.initials || getInitials(row.student || 'U')
         }));
+        availableYears = data?.availableYears || [];
     } catch (err) {
         console.error('Failed to load records from API:', err);
         allRecords = [];
+        availableYears = [];
     }
-
-    renderPage(container, app);
 }
 
 function renderPage(container, app) {
@@ -52,12 +59,24 @@ function renderPage(container, app) {
     const uniqueCompanies = new Set(allRecords.map(r => r.company)).size;
     const avgPackage = allRecords.length ? (allRecords.reduce((s, r) => s + r.packageLpa, 0) / allRecords.length).toFixed(1) : '0.0';
 
+    const yearsOptions = ['all', ...availableYears].map(yr => {
+        const label = yr === 'all' ? 'All Time' : yr;
+        const selected = String(yr) === String(recordsState.selectedYear) ? 'selected' : '';
+        return `<option value="${yr}" ${selected}>${label}</option>`;
+    }).join('');
+
     container.innerHTML = `
         <div class="admin-dashboard-shell admin-records-shell">
-            <div class="admin-dashboard-header admin-records-header">
+            <div class="admin-dashboard-header admin-records-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
                     <h1>Placement Records</h1>
                     <p>Live placement data from the database — filtered by status and department.</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.9rem; font-weight: 500; color: #64748b; margin-right: 8px;">Filter by Year:</label>
+                    <select id="records-year-filter" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.95rem; font-family: inherit; font-weight: 500; cursor: pointer; outline: none; background: #fff;">
+                        ${yearsOptions}
+                    </select>
                 </div>
             </div>
 
@@ -227,6 +246,12 @@ function renderPage(container, app) {
 }
 
 function bindInteractions(container, app) {
+    container.querySelector('#records-year-filter')?.addEventListener('change', async (event) => {
+        recordsState.selectedYear = event.target.value;
+        await fetchRecords(container);
+        renderPage(container, app);
+    });
+
     container.querySelector('#admin-record-search')?.addEventListener('input', (event) => {
         recordsState.query = event.target.value.trim();
         renderPage(container, app);

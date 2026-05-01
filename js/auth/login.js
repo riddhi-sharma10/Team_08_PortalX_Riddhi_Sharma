@@ -33,10 +33,9 @@ export function initLogin(app) {
 
                 <div class="form-group">
                     <label>PASSWORD</label>
-                    <div class="input-with-icon" style="position: relative;">
+                    <div class="input-with-icon">
                         <ion-icon name="lock-closed-outline"></ion-icon>
-                        <input type="password" id="password" placeholder="••••••••" required style="padding-right: 40px;">
-                        <ion-icon id="toggle-password" name="eye-outline" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1.2rem; color: var(--text-muted); padding: 0; pointer-events: auto;"></ion-icon>
+                        <input type="password" id="password" placeholder="••••••••" required>
                     </div>
                 </div>
 
@@ -70,15 +69,6 @@ export function initLogin(app) {
             opt.classList.add('active');
             selectedRole = opt.dataset.role;
         });
-    });
-
-    // Password Toggle Logic
-    const togglePassword = document.getElementById('toggle-password');
-    const passwordInput = document.getElementById('password');
-    togglePassword.addEventListener('click', () => {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        togglePassword.setAttribute('name', type === 'password' ? 'eye-outline' : 'eye-off-outline');
     });
 
     // Form Submission
@@ -124,3 +114,6 @@ export function initLogin(app) {
         }
     });
 }
+
+        
+        

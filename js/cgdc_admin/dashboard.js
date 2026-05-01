@@ -115,14 +115,10 @@ function renderShell(container) {
                     <div class="admin-tier-list">
                         ${data.tiers
                           .map((t) => {
-                            const pct =
-                              tierTotal > 0
-                                ? ((t.value / tierTotal) * 100).toFixed(1)
-                                : "0.0";
                             return `
                                 <div class="admin-tier-item">
                                     <span><i style="background:${t.color}"></i>${t.label}</span>
-                                    <strong>${pct}%</strong>
+                                    <strong>${t.value}</strong>
                                 </div>
                             `;
                           })

@@ -49,7 +49,6 @@ export async function render(container, app) {
 
             <div class="admin-users-header">
                 <h1>User Directory</h1>
-                <p>Manage institutional access for engineering users across CSE, ECE, and ME with role-based controls.</p>
             </div>
 
             <div class="admin-users-kpis">

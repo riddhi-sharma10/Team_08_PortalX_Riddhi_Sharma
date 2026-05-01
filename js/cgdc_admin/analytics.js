@@ -4,6 +4,7 @@ import { api } from "../api.js";
 let analyticsData = null;
 
 const analyticsState = {
+  selectedYear: 'all',
   charts: {
     salary: null,
     dept: null,
@@ -22,9 +23,13 @@ export async function render(container, app) {
         </div>
     `;
 
-  // Fetch analytics data from the API
+  await fetchAnalytics();
+  renderUi(container, app);
+}
+
+async function fetchAnalytics() {
   try {
-    analyticsData = await api.get("/admin/analytics");
+    analyticsData = await api.get(`/admin/analytics?year=${analyticsState.selectedYear}`);
   } catch (err) {
     console.error("Failed to load analytics from API:", err);
     analyticsData = {
@@ -36,15 +41,30 @@ export async function render(container, app) {
       monthLabels: [],
       departments: [],
       insights: ["Analytics data could not be loaded."],
+      availableYears: []
     };
   }
+}
+
+function renderUi(container, app) {
+  const yearsOptions = ['all', ...(analyticsData.availableYears || [])].map(yr => {
+      const label = yr === 'all' ? 'All Time' : yr;
+      const selected = String(yr) === String(analyticsState.selectedYear) ? 'selected' : '';
+      return `<option value="${yr}" ${selected}>${label}</option>`;
+  }).join('');
 
   container.innerHTML = `
         <div class="admin-dashboard-shell">
-            <div class="admin-dashboard-header">
+            <div class="admin-dashboard-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
                     <h1>Reports & Analytics</h1>
                     <p>Deep dive into placement data and performance metrics — powered by live database.</p>
+                </div>
+                <div>
+                    <label style="font-size: 0.9rem; font-weight: 500; color: #64748b; margin-right: 8px;">Filter by Year:</label>
+                    <select id="analytics-year-filter" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.95rem; font-family: inherit; font-weight: 500; cursor: pointer; outline: none; background: #fff;">
+                        ${yearsOptions}
+                    </select>
                 </div>
             </div>
 
@@ -116,6 +136,21 @@ export async function render(container, app) {
     `;
 
   updateAnalyticsView();
+
+  const yearFilter = document.getElementById("analytics-year-filter");
+  if (yearFilter) {
+      yearFilter.addEventListener("change", async (e) => {
+          analyticsState.selectedYear = e.target.value;
+          
+          destroyCharts();
+          document.getElementById('salaryChart').parentElement.innerHTML = '<h3 style="margin-bottom: 14px; color:#0f2f61;">Salary Distribution</h3><canvas id="salaryChart" style="max-height: 300px;"></canvas>';
+          document.getElementById('pieChart').parentElement.innerHTML = '<h3 style="margin-bottom: 14px; color:#0f2f61;">Placement % by Department</h3><canvas id="pieChart" style="max-height: 300px;"></canvas>';
+          document.getElementById('trendChart').parentElement.innerHTML = '<h3 style="margin-bottom: 14px; color:#0f2f61;">Applications vs Offers Trend</h3><canvas id="trendChart" style="max-height: 320px;"></canvas>';
+          
+          await fetchAnalytics();
+          updateAnalyticsView();
+      });
+  }
 }
 
 function updateAnalyticsView() {
@@ -209,9 +244,12 @@ function renderCharts(data) {
 
   const deptCanvas = document.getElementById("pieChart");
   if (deptCanvas) {
-    const deptLabels = data.departments.slice(0, 5).map((d) => d.name);
-    const deptValues = data.departments.slice(0, 5).map((d) => d.placementPct);
-    const deptColors = ["#1B3A6B", "#355C91", "#7B8CA5", "#F5A623", "#10b981"];
+    const deptLabels = data.departments.map((d) => d.name);
+    const deptValues = data.departments.map((d) => d.placementPct);
+    const deptColors = [
+      "#1B3A6B", "#355C91", "#7B8CA5", "#F5A623", "#10b981", 
+      "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"
+    ];
 
     analyticsState.charts.dept = new Chart(deptCanvas, {
       type: "pie",
@@ -220,10 +258,9 @@ function renderCharts(data) {
         datasets: [
           {
             data: deptValues,
-            backgroundColor: deptColors.slice(0, deptLabels.length),
+            backgroundColor: deptLabels.map((_, i) => deptColors[i % deptColors.length]),
             borderColor: "#ffffff",
-            borderWidth: 3,
-            hoverBorderWidth: 3,
+            borderWidth: 2,
             hoverOffset: 8,
           },
         ],

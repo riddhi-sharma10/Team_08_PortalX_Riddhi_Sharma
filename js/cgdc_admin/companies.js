@@ -138,7 +138,7 @@ export async function render(container, app) {
             placements: Number(row.placements || 0),
             positionsCount: Number(row.positionsCount || 0),
             positions: row.positions || []
-        })).sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' }));
+        })).sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
     } catch (err) {
         console.error('Failed to load companies from API:', err);
         companiesData = [];
