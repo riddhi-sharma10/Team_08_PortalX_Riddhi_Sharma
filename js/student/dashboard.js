@@ -160,6 +160,36 @@ function renderDashboard(container, app, applications, jobs, profile) {
                         </div>
                     </div>
 
+                    <!-- Mentor & Guidance Card -->
+                    <div class="card" style="padding: 24px; background: #f0f9ff; border: 1px solid #bae6fd;">
+                        <h3 style="margin-bottom: 16px; color: #0369a1; font-weight: 800; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                            <ion-icon name="person-circle-outline"></ion-icon>
+                            Mentor & Guidance
+                        </h3>
+                        ${profile.coordinator_name 
+                            ? `
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <div style="width: 40px; height: 40px; border-radius: 50%; background: #0ea5e9; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700;">
+                                        ${profile.coordinator_name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #0c4a6e;">${profile.coordinator_name}</div>
+                                        <div style="font-size: 0.8rem; color: #0369a1;">Placement Coordinator</div>
+                                    </div>
+                                </div>
+                                <div style="font-size: 0.85rem; color: #0369a1; display: flex; align-items: center; gap: 6px;">
+                                    <ion-icon name="mail-outline"></ion-icon>
+                                    ${profile.coordinator_email}
+                                </div>
+                              `
+                            : `
+                                <p style="font-size: 0.85rem; color: #0369a1; line-height: 1.5; margin: 0;">
+                                    <b>Pending Assignment:</b> Your case will be assigned to a coordinator shortly for personalized guidance.
+                                </p>
+                              `
+                        }
+                    </div>
+
                     <!-- DB Info Card -->
                     <div class="card" style="padding: 24px; background: #fffcf0; border: 1px solid #f2cf9e;">
                         <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 12px;">

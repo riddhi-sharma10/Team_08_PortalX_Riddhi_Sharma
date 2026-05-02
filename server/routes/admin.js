@@ -20,8 +20,20 @@ router.get('/dashboard', async (req, res) => {
         const [applications] = await pool.query('SELECT COUNT(*) AS count FROM APPLICATION');
         const [verified] = await pool.query("SELECT COUNT(*) AS count FROM STUDENT WHERE profile_status NOT IN ('opted_out', 'not_eligible')");
         const [interviews] = await pool.query("SELECT COUNT(*) AS count FROM APPLICATION WHERE status IN ('under_review', 'shortlisted', 'applied')");
-        const [offers] = await pool.query("SELECT COUNT(DISTINCT s_id) AS count FROM PLACEMENT_RECORD");
-        const [totalJobOffers] = await pool.query("SELECT COUNT(*) AS count FROM PLACEMENT_RECORD");
+        const [offers] = await pool.query(`
+            SELECT COUNT(DISTINCT s_id) AS count FROM (
+                SELECT s_id FROM PLACEMENT_RECORD
+                UNION
+                SELECT s_id FROM APPLICATION WHERE status = 'selected'
+            ) as combined_placed
+        `);
+        const [totalJobOffers] = await pool.query(`
+            SELECT COUNT(*) AS count FROM (
+                SELECT record_id FROM PLACEMENT_RECORD
+                UNION ALL
+                SELECT app_id FROM APPLICATION WHERE status = 'selected'
+            ) as combined_offers
+        `);
 
         const [trend] = await pool.query(`
             SELECT DATE_FORMAT(recorded_on, '%b') AS label,
@@ -72,6 +84,8 @@ router.get('/dashboard', async (req, res) => {
                 CASE 
                     WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN 0
                     WHEN best_pr.comp_id IS NOT NULL THEN best_pr.salary_offered
+                    WHEN latest_app.status = 'selected' THEN COALESCE(aj.package, 0)
+                    WHEN latest_app.status = 'selected' THEN COALESCE(aj.package, 0)
                     ELSE 0
                 END AS packageLpa,
                 CASE 
@@ -265,7 +279,7 @@ router.get('/companies', async (req, res) => {
             LEFT JOIN JOB_PROFILE j ON j.comp_id = c.comp_id
             LEFT JOIN APPLICATION a ON a.job_id = j.job_id
             GROUP BY c.comp_id, c.comp_name, c.industry_type, c.tier, 'active'
-            ORDER BY c.comp_name ASC
+            ORDER BY c.comp_id DESC
         `);
 
         const q = String(query).toLowerCase();
@@ -287,17 +301,20 @@ router.get('/records', async (req, res) => {
                 CASE 
                     WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN '-'
                     WHEN best_pr.comp_id IS NOT NULL THEN COALESCE(c.comp_name, '-')
+                    WHEN latest_app.status = 'selected' THEN COALESCE(ac.comp_name, '-')
                     ELSE '-'
                 END AS company,
                 CASE 
                     WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN 0
                     WHEN best_pr.comp_id IS NOT NULL THEN best_pr.salary_offered
+                    WHEN latest_app.status = 'selected' THEN COALESCE(aj.package, 0)
                     ELSE 0
                 END AS packageLpa,
                 CASE 
                     WHEN s.profile_status = 'opted_out' THEN 'Opted Out'
                     WHEN s.profile_status = 'not_eligible' THEN 'Not Eligible'
                     WHEN best_pr.record_id IS NOT NULL THEN 'Placed'
+                    WHEN latest_app.status = 'selected' THEN 'Placed'
                     WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'Active'
                     WHEN latest_app.status = 'rejected' THEN 'Rejected'
                     ELSE 'Active'
@@ -334,7 +351,7 @@ router.get('/records', async (req, res) => {
         const [rows] = await pool.query(sql, params);
 
         const q = String(query).toLowerCase();
-        
+
         // Fetch available years
         const [yearsRes] = await pool.query(`
             SELECT DISTINCT YEAR(applied_date) AS yr FROM APPLICATION WHERE applied_date IS NOT NULL
@@ -360,7 +377,7 @@ router.get('/analytics', async (req, res) => {
         let studentWhere = '';
         let appFilterOnlyWhere = '';
         let prAnd = '';
-        
+
         if (year !== 'all') {
             studentWhere = 'WHERE s.graduation_yr = ?';
             appFilterOnlyWhere = 'WHERE YEAR(applied_date) = ?';
@@ -372,9 +389,30 @@ router.get('/analytics', async (req, res) => {
         const studentFilter = studentWhere ? studentWhere : "";
         const [students] = await pool.query(`SELECT COUNT(*) AS count FROM STUDENT s ${studentFilter}`, appParams);
         const [applications] = await pool.query(`SELECT COUNT(*) AS count FROM APPLICATION ${appFilterOnlyWhere}`, appParams);
-        const [placed] = await pool.query(`SELECT COUNT(DISTINCT s_id) AS count FROM PLACEMENT_RECORD ${prAnd}`, appParams);
-        const [maxPkg] = await pool.query(`SELECT MAX(salary_offered) AS val FROM PLACEMENT_RECORD ${prAnd}`, appParams);
-        const [avgPkg] = await pool.query(`SELECT AVG(salary_offered) AS val FROM PLACEMENT_RECORD ${prAnd}`, appParams);
+        // Total Placed = Unique students in PLACEMENT_RECORD OR with 'selected' applications
+        const [placed] = await pool.query(`
+            SELECT COUNT(DISTINCT s_id) AS count FROM (
+                SELECT s_id FROM PLACEMENT_RECORD ${prAnd}
+                UNION
+                SELECT s_id FROM APPLICATION WHERE status = 'selected' ${year !== 'all' ? 'AND YEAR(applied_date) = ?' : ''}
+            ) as combined_placed
+        `, year !== 'all' ? [appParams[0], appParams[0]] : []);
+
+        const [maxPkg] = await pool.query(`
+            SELECT MAX(val) as val FROM (
+                SELECT salary_offered as val FROM PLACEMENT_RECORD ${prAnd}
+                UNION
+                SELECT j.package as val FROM APPLICATION a JOIN JOB_PROFILE j ON a.job_id = j.job_id WHERE a.status = 'selected' ${year !== 'all' ? 'AND YEAR(a.applied_date) = ?' : ''}
+            ) as combined_pkg
+        `, year !== 'all' ? [appParams[0], appParams[0]] : []);
+
+        const [avgPkg] = await pool.query(`
+            SELECT AVG(val) as val FROM (
+                SELECT salary_offered as val FROM PLACEMENT_RECORD ${prAnd}
+                UNION
+                SELECT j.package as val FROM APPLICATION a JOIN JOB_PROFILE j ON a.job_id = j.job_id WHERE a.status = 'selected' ${year !== 'all' ? 'AND YEAR(a.applied_date) = ?' : ''}
+            ) as combined_pkg
+        `, year !== 'all' ? [appParams[0], appParams[0]] : []);
 
         const totalStudents = Number(students[0]?.count || 0);
         const totalPlaced = Number(placed[0]?.count || 0);
@@ -512,7 +550,7 @@ router.get('/profile', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [admins] = await pool.query(
-            'SELECT name, email, avatar_url FROM CGDC_ADMIN WHERE cgdc_id = ?',
+            'SELECT name, email FROM CGDC_ADMIN WHERE cgdc_id = ?',
             [id]
         );
         const a = admins[0] || { name: req.user.username, email: 'admin@university.edu' };
@@ -524,7 +562,6 @@ router.get('/profile', async (req, res) => {
         res.json({
             name: a.name,
             email: a.email,
-            avatar_url: a.avatar_url,
             designation: 'Placement Cell Administrator',
             department: 'Training & Placement Office',
             totalCoordinators: Number(coordRow[0]?.cnt || 0),
@@ -578,21 +615,32 @@ router.get('/company/:id', async (req, res) => {
     }
 });
 
-// Update profile
-router.put('/profile', async (req, res) => {
+// --- Admin Profile ---
+router.get('/profile', async (req, res) => {
     try {
-        const id = req.user.entityId;
-        const { avatar_url } = req.body;
-        
-        await pool.query(
-            'UPDATE CGDC_ADMIN SET avatar_url = ? WHERE cgdc_id = ?',
-            [avatar_url, id]
+        const id = req.user.entityId || 0;
+        const [admins] = await pool.query(
+            'SELECT name, email FROM CGDC_ADMIN WHERE cgdc_id = ?',
+            [id]
         );
-        
-        res.json({ message: 'Profile updated successfully' });
+        const a = admins[0] || { name: req.user.username, email: 'admin@university.edu' };
+
+        const [coordRow] = await pool.query('SELECT COUNT(*) AS cnt FROM PLACEMENT_COORDINATOR');
+        const [compRow] = await pool.query('SELECT COUNT(*) AS cnt FROM COMPANY');
+        const [studRow] = await pool.query('SELECT COUNT(*) AS cnt FROM STUDENT');
+
+        res.json({
+            name: a.name,
+            email: a.email,
+            designation: 'Placement Cell Administrator',
+            department: 'Training & Placement Office',
+            totalCoordinators: Number(coordRow[0]?.cnt || 0),
+            totalCompanies: Number(compRow[0]?.cnt || 0),
+            totalStudents: Number(studRow[0]?.cnt || 0),
+        });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Error updating profile' });
+        console.error('Admin Profile Error:', err);
+        res.status(500).json({ message: 'Error loading admin profile' });
     }
 });
 
@@ -653,18 +701,10 @@ router.post('/student', async (req, res) => {
     } catch (err) {
         await conn.rollback();
         console.error('Error adding student:', err);
-        
         if (err.code === 'ER_DUP_ENTRY') {
-            if (err.sqlMessage.includes('username') || err.sqlMessage.includes('USER_ROLE')) {
-                return res.status(409).json({ message: 'A user account with this email/username already exists.' });
-            }
-            if (err.sqlMessage.includes('email') || err.sqlMessage.includes('STUDENT')) {
-                return res.status(409).json({ message: 'A student with this email is already registered.' });
-            }
-            return res.status(409).json({ message: 'A record with these details already exists.' });
+            return res.status(409).json({ message: 'Email already exists' });
         }
-        
-        res.status(500).json({ message: 'Failed to add student: ' + err.message });
+        res.status(500).json({ message: 'Failed to add student' });
     } finally {
         conn.release();
     }
@@ -676,14 +716,14 @@ router.delete('/student/:id', async (req, res) => {
     try {
         await conn.beginTransaction();
         const { id } = req.params;
-        
+
         // Delete all linked data first to avoid FK constraints
         await conn.query('DELETE FROM APPLICATION WHERE s_id = ?', [id]);
         await conn.query('DELETE FROM PLACEMENT_RECORD WHERE s_id = ?', [id]);
         await conn.query('DELETE FROM RESUME WHERE s_id = ?', [id]);
         await conn.query('DELETE FROM USER_ROLE WHERE entity_id = ? AND role = ?', [id, 'student']);
         await conn.query('DELETE FROM STUDENT WHERE s_id = ?', [id]);
-        
+
         await conn.commit();
         res.json({ message: 'Student deleted successfully' });
     } catch (err) {
@@ -701,7 +741,7 @@ router.post('/coordinator', async (req, res) => {
     try {
         await conn.beginTransaction();
         const { name, email, phone_no, dept, cgdc_id } = req.body;
-        
+
         if (!name || !email || !dept) {
             return res.status(400).json({ message: 'Missing required fields' });
         }
@@ -756,57 +796,42 @@ router.post('/company', async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-        const { 
-            name, industry, tier, location, website, jobRole, avgPackage, 
-            contactEmail, contactPhone, positions 
-        } = req.body;
+        const { name, industry, tier, location, website, contactPerson, contactEmail, contactPhone, description, establishedYear, activeJobs, placements, status, positions } = req.body;
 
         if (!name || !industry || !tier) {
-            return res.status(400).json({ message: 'Missing required fields' });
+            return res.status(400).json({ message: 'Missing required company fields' });
         }
 
         const [result] = await conn.query(
-            'INSERT INTO COMPANY (comp_name, industry_type, location, contact_email, contact_phone, job_role, avg_package_offered, tier, website) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [
-                name, 
-                industry, 
-                location || null, 
-                contactEmail || null, 
-                contactPhone || null, 
-                jobRole || null, 
-                parseFloat(avgPackage) || 0, 
-                tier, 
-                website || null
-            ]
+            'INSERT INTO COMPANY (comp_name, industry_type, location, contact_email, contact_phone, tier, website) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [name, industry, location || null, contactEmail || null, contactPhone || null, tier, website || null]
         );
-
         const compId = result.insertId;
 
-        // Save positions to JOB_PROFILE
-        if (positions && Array.isArray(positions)) {
+        if (positions && positions.length > 0) {
             for (const pos of positions) {
-                await conn.query(
-                    'INSERT INTO JOB_PROFILE (comp_id, role, job_type, package, eligibility_cgpa, eligible_branch, required_skills, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    [
-                        compId, 
-                        pos.title, 
-                        pos.type || 'Full Time', 
-                        parseFloat(pos.salary) || 0, 
-                        parseFloat(pos.cgpa) || 0, 
-                        pos.branch || null, 
-                        pos.skills || null, 
-                        'open'
-                    ]
-                );
+                try {
+                    // Parse salary: accept '8-12 LPA' or plain number
+                    const salaryStr = String(pos.salary || '0').replace(/[^0-9.]/g, '');
+                    const salaryNum = parseFloat(salaryStr) || null;
+
+                    await conn.query(
+                        'INSERT INTO JOB_PROFILE (comp_id, role, job_type, package) VALUES (?, ?, ?, ?)',
+                        [compId, pos.title || 'Unknown', 'Full Time', salaryNum]
+                    );
+                } catch (e) {
+                    console.error('Failed to add job profile entry:', e.message);
+                    // Non-fatal — continue with other positions
+                }
             }
         }
 
         await conn.commit();
-        res.status(201).json({ message: 'Company and positions added successfully', compId });
+        res.status(201).json({ message: 'Company added successfully', id: compId });
     } catch (err) {
         await conn.rollback();
         console.error('Error adding company:', err);
-        res.status(500).json({ message: 'Failed to add company: ' + err.message });
+        res.status(500).json({ message: 'Failed to add company' });
     } finally {
         conn.release();
     }
@@ -821,6 +846,58 @@ router.delete('/company/:id', async (req, res) => {
     } catch (err) {
         console.error('Error deleting company:', err);
         res.status(500).json({ message: 'Failed to delete company' });
+    }
+});
+
+// GET /admin/assignments - Get unique active students for assignment
+router.get('/assignments', async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT 
+                s.s_id, 
+                s.s_name, 
+                s.dept, 
+                s.email,
+                s.coord_id,
+                pc.name AS coordinator_name,
+                (SELECT COUNT(*) FROM APPLICATION a WHERE a.s_id = s.s_id) as app_count,
+                s.created_at
+            FROM STUDENT s
+            LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            WHERE LOWER(s.profile_status) = 'active'
+            
+            ORDER BY s.created_at DESC, s.s_id DESC
+        `);
+        console.log(`[Admin] Assignments found: ${rows.length} active students.`);
+        res.json(rows);
+    } catch (err) {
+        console.error('[Admin] Assignments Error:', err);
+        res.status(500).json({ message: 'Error fetching assignments' });
+    }
+});
+
+// GET /admin/coordinators - Get all coordinators for the dropdown
+router.get('/coordinators', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT coord_id, name as coord_name FROM PLACEMENT_COORDINATOR ORDER BY name ASC');
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching coordinators:', err);
+        res.status(500).json({ message: 'Failed to fetch coordinators' });
+    }
+});
+
+// POST /admin/assignments/assign - Assign a coordinator to a student
+router.post('/assignments/assign', async (req, res) => {
+    try {
+        const { s_id, coord_id } = req.body;
+        if (!s_id) return res.status(400).json({ message: 'Student ID is required' });
+
+        await pool.query('UPDATE STUDENT SET coord_id = ? WHERE s_id = ?', [coord_id || null, s_id]);
+        res.json({ message: 'Coordinator assigned successfully' });
+    } catch (err) {
+        console.error('Error assigning coordinator:', err);
+        res.status(500).json({ message: 'Failed to assign coordinator' });
     }
 });
 

@@ -127,6 +127,23 @@ router.post('/accept', requireAuth, async (req, res) => {
             [student_id]
         );
 
+        // 5. Create a PLACEMENT_RECORD for Admin sync
+        // Get details for the record
+        const [studentDetails] = await conn.query("SELECT dept, graduation_yr FROM STUDENT WHERE s_id = ?", [student_id]);
+        const [jobDetails] = await conn.query("SELECT comp_id, package FROM JOB_PROFILE WHERE job_id = ?", [job_id]);
+        
+        const dept = studentDetails[0]?.dept || 'Unknown';
+        const gradYear = studentDetails[0]?.graduation_yr || new Date().getFullYear();
+        const compId = jobDetails[0]?.comp_id;
+        const salary = jobDetails[0]?.package || 0;
+
+        if (compId) {
+            await conn.query(`
+                INSERT INTO PLACEMENT_RECORD (s_id, comp_id, academic_year, salary_offered, stream, status, recorded_on)
+                VALUES (?, ?, ?, ?, ?, 'confirmed', CURDATE())
+            `, [student_id, compId, gradYear, salary, dept]);
+        }
+
         await conn.commit();
         res.json({ message: 'Offer accepted successfully! You are now marked as PLACED.' });
     } catch (err) {

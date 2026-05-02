@@ -2,12 +2,9 @@
 import { api } from '../api.js';
 
 let companiesData = [];
-const state = {
-    pendingDelete: null
-};
 
 function getTierBadgeClass(tier) {
-    switch(tier) {
+    switch (tier) {
         case 'Tier 1': return 'tag-tier1';
         case 'Tier 2': return 'tag-tier2';
         case 'Startup': return 'tag-startup';
@@ -27,55 +24,33 @@ function openAddCompanyModal(container) {
 
 function closeAddCompanyModal(container) {
     const modal = document.getElementById('addCompanyModal');
-    if (modal) modal.style.display = 'none';
+    modal.style.display = 'none';
     document.body.style.overflow = 'auto';
-    
+
     // Reset form
     const form = document.getElementById('companyForm');
     if (form) form.reset();
 }
 
-function showSuccess(msg) {
-    const modal = document.getElementById('successModal');
-    const msgEl = document.getElementById('success-modal-msg');
-    if (modal && msgEl) {
-        msgEl.textContent = msg;
-        modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-    }
-}
-
-function closeSuccessModal() {
-    const modal = document.getElementById('successModal');
-    if (modal) modal.style.display = 'none';
-    document.body.style.overflow = 'auto';
-}
-
-function closeDeleteModal() {
-    const modal = document.getElementById('deleteConfirmModal');
-    if (modal) modal.style.display = 'none';
-    document.body.style.overflow = 'auto';
-    state.pendingDelete = null;
-    
-    const btn = document.getElementById('confirmDeleteBtn');
-    if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Yes, Delete Company';
-    }
-}
-
 async function handleAddCompany(container, currentFilter, app) {
+    const form = document.getElementById('companyForm');
+
     const newCompany = {
         name: document.getElementById('companyName').value.trim(),
         industry: document.getElementById('industry').value.trim(),
         tier: document.getElementById('tier').value,
         location: document.getElementById('location').value.trim(),
         website: document.getElementById('website').value.trim(),
-        jobRole: document.getElementById('jobRole').value.trim(),
-        avgPackage: parseFloat(document.getElementById('avgPackage').value) || 0,
+        contactPerson: document.getElementById('contactPerson').value.trim(),
         contactEmail: document.getElementById('contactEmail').value.trim(),
         contactPhone: document.getElementById('contactPhone').value.trim(),
-        positions: []
+        description: document.getElementById('description').value.trim(),
+        establishedYear: document.getElementById('establishedYear').value.trim(),
+        activeJobs: parseInt(document.getElementById('activeJobs').value) || 0,
+        placements: parseInt(document.getElementById('placements').value) || 0,
+        status: document.getElementById('status').value,
+        positions: [],
+        positionsCount: 0
     };
 
     // Validation
@@ -84,21 +59,38 @@ async function handleAddCompany(container, currentFilter, app) {
         return;
     }
 
+    const emailVal = newCompany.contactEmail;
+    const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+    if (emailVal && !emailRegex.test(emailVal)) {
+        alert('Please enter a valid Contact Email address (e.g., hr@company.com).');
+        return;
+    }
+
+    const phoneVal = newCompany.contactPhone;
+    const phoneRegex = /^[0-9]{10}$/;
+    if (phoneVal && !phoneRegex.test(phoneVal)) {
+        alert('Contact Phone must be exactly 10 digits (numbers only).');
+        return;
+    }
+
+    if (newCompany.activeJobs < 0 || newCompany.placements < 0) {
+        alert('Jobs and placements must be positive numbers.');
+        return;
+    }
+
     // Collect positions
     const positionItems = document.querySelectorAll('.position-item');
     positionItems.forEach(item => {
         const title = item.querySelector('.position-title').value.trim();
-        const type = item.querySelector('.position-type').value;
         const salary = item.querySelector('.position-salary').value.trim();
-        const cgpa = item.querySelector('.position-cgpa').value.trim();
-        const branch = item.querySelector('.position-branch').value.trim();
         const skills = item.querySelector('.position-skills').value.trim();
-        
-        if (title) {
-            newCompany.positions.push({ title, type, salary, cgpa, branch, skills });
+
+        if (title || salary || skills) {
+            newCompany.positions.push({ title, salary, skills });
         }
     });
 
+    // Call API to save to database
     try {
         const submitBtn = document.getElementById('submitBtn');
         if (submitBtn) {
@@ -107,8 +99,11 @@ async function handleAddCompany(container, currentFilter, app) {
         }
 
         await api.post('/admin/company', newCompany);
+
+        // Close modal
         closeAddCompanyModal(container);
-        showSuccess('Company added successfully with ' + newCompany.positions.length + ' positions synced.');
+
+        // Re-render
         render(container, app);
     } catch (err) {
         console.error('Failed to add company:', err);
@@ -121,57 +116,33 @@ async function handleAddCompany(container, currentFilter, app) {
     }
 }
 
-
 function addPositionField() {
     const container = document.getElementById('positionsContainer');
     const positionCount = container.querySelectorAll('.position-item').length;
-    
+
     const positionHTML = `
-        <div class="position-item" style="padding: 18px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; position: relative; display: grid; gap: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-            <button type="button" class="remove-position-btn" style="position: absolute; top: 12px; right: 12px; background: #fee2e2; border: 1px solid #fecaca; color: #ef4444; cursor: pointer; font-size: 1.1rem; padding: 0; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s;">×</button>
+        <div class="position-item" style="padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; position: relative; display: grid; gap: 12px;">
+            <button type="button" class="remove-position-btn" onclick="this.parentElement.remove()" style="position: absolute; top: 8px; right: 8px; background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">×</button>
             
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
-                <div style="display: grid; gap: 6px;">
-                    <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Position Role/Title *</label>
-                    <input type="text" class="position-title" required placeholder="e.g., Software Engineer" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; outline: none;">
-                </div>
-                <div style="display: grid; gap: 6px;">
-                    <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Job Type</label>
-                    <select class="position-type" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; outline: none;">
-                        <option value="Full Time">Full Time</option>
-                        <option value="Internship">Internship</option>
-                        <option value="Contract">Contract</option>
-                    </select>
-                </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
-                <div style="display: grid; gap: 6px;">
-                    <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Package (LPA)</label>
-                    <input type="number" step="0.1" class="position-salary" placeholder="e.g., 12.5" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; outline: none;">
-                </div>
-                <div style="display: grid; gap: 6px;">
-                    <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Min CGPA</label>
-                    <input type="number" step="0.01" min="0" max="10" class="position-cgpa" placeholder="7.0" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; outline: none;">
-                </div>
-                <div style="display: grid; gap: 6px;">
-                    <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Eligible Branch</label>
-                    <input type="text" class="position-branch" placeholder="CSE, IT, ECE" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; outline: none;">
-                </div>
-            </div>
-
             <div style="display: grid; gap: 6px;">
-                <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Required Skills</label>
-                <input type="text" class="position-skills" placeholder="e.g., React, Node.js, SQL" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; outline: none;">
+                <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Position Title</label>
+                <input type="text" class="position-title" placeholder="e.g., Software Engineer" style="border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; outline: none;">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="display: grid; gap: 6px;">
+                    <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Salary Range</label>
+                    <input type="text" class="position-salary" placeholder="e.g., 8-12 LPA" style="border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; outline: none;">
+                </div>
+                <div style="display: grid; gap: 6px;">
+                    <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Required Skills</label>
+                    <input type="text" class="position-skills" placeholder="e.g., Java, SQL" style="border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; outline: none;">
+                </div>
             </div>
         </div>
     `;
-    
+
     container.insertAdjacentHTML('beforeend', positionHTML);
-    
-    // Wire up remove button
-    const lastItem = container.lastElementChild;
-    lastItem.querySelector('.remove-position-btn').addEventListener('click', () => lastItem.remove());
 }
 
 export async function render(container, app) {
@@ -337,17 +308,12 @@ export async function render(container, app) {
 
                             <div style="display: grid; gap: 6px;">
                                 <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Website</label>
-                                <input type="text" id="website" placeholder="e.g., www.company.com" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                                <input type="text" id="website" placeholder="e.g., https://company.com" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
                             </div>
 
                             <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Main Job Role</label>
-                                <input type="text" id="jobRole" placeholder="e.g., Backend Developer" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                            </div>
-
-                            <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Avg Package (LPA)</label>
-                                <input type="number" step="0.1" id="avgPackage" placeholder="e.g., 9.5" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Established Year</label>
+                                <input type="text" id="establishedYear" placeholder="e.g., 1998" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
                             </div>
                         </div>
                     </div>
@@ -397,9 +363,9 @@ export async function render(container, app) {
                     <div style="display: grid; gap: 12px; padding-top: 12px; border-top: 2px solid #e2e8f0;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <label style="font-weight: 700; color: var(--text-main); font-size: 0.95rem;">Job Positions</label>
-                            <button type="button" id="addPositionBtn" style="background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 12px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;">+ Add Position</button>
+                            <button type="button" id="addPositionBtn" onclick="addPositionField()" style="background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 12px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;">+ Add Position</button>
                         </div>
-                        <p style="color: var(--text-muted); font-size: 0.85rem; margin: -4px 0 0 0; line-height: 1.4;">Add positions here. The <b>Active Jobs</b> count in the table is automatically calculated based on how many positions you add below.</p>
+                        <p style="color: var(--text-muted); font-size: 0.85rem; margin: -4px 0 0 0;">Add one or more positions with title, salary range, and required skills.</p>
                         <div id="positionsContainer" style="display: grid; gap: 12px;"></div>
                     </div>
 
@@ -410,39 +376,6 @@ export async function render(container, app) {
                 </form>
             </div>
         </div>
-
-        <!-- Custom Delete Confirm Modal -->
-        <div id="deleteConfirmModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 2000; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(8px);">
-            <div style="background: white; border-radius: 20px; box-shadow: 0 40px 100px rgba(0,0,0,0.25); width: 100%; max-width: 420px; overflow: hidden; border: 1px solid #e2e8f0;">
-                <div style="padding: 32px; text-align: center;">
-                    <div style="width: 64px; height: 64px; background: #fff1f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: #e11d48; font-size: 2rem;">
-                        <ion-icon name="alert-circle-outline"></ion-icon>
-                    </div>
-                    <h2 style="font-size: 1.4rem; color: #0f172a; margin: 0 0 12px 0;">Delete Company?</h2>
-                    <p style="color: #64748b; font-size: 0.95rem; line-height: 1.5; margin: 0;">Are you sure you want to delete this company? This will also remove associated job postings and student applications. This action cannot be undone.</p>
-                </div>
-                <div style="padding: 20px 32px 32px; display: flex; flex-direction: column; gap: 12px;">
-                    <button id="confirmDeleteBtn" style="width: 100%; padding: 14px; border: none; border-radius: 12px; background: #e11d48; color: white; font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s;">Yes, Delete Company</button>
-                    <button id="cancelDeleteBtn" style="width: 100%; padding: 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; color: #64748b; font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s;">No, Take me back</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Custom Success Modal -->
-        <div id="successModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 2000; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(8px);">
-            <div style="background: white; border-radius: 20px; box-shadow: 0 40px 100px rgba(0,0,0,0.25); width: 100%; max-width: 400px; overflow: hidden; border: 1px solid #e2e8f0;">
-                <div style="padding: 32px; text-align: center;">
-                    <div style="width: 64px; height: 64px; background: #f0fdf4; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: #16a34a; font-size: 2.5rem;">
-                        <ion-icon name="checkmark-circle-outline"></ion-icon>
-                    </div>
-                    <h2 style="font-size: 1.4rem; color: #0f172a; margin: 0 0 12px 0;">Success!</h2>
-                    <p id="success-modal-msg" style="color: #64748b; font-size: 0.95rem; line-height: 1.5; margin: 0;">Operation completed successfully.</p>
-                </div>
-                <div style="padding: 0 32px 32px;">
-                    <button id="closeSuccessBtn" style="width: 100%; padding: 14px; border: none; border-radius: 12px; background: var(--primary); color: white; font-weight: 600; font-size: 1rem; cursor: pointer;">Awesome</button>
-                </div>
-            </div>
-        </div>
     `;
 
     // Event listeners
@@ -450,13 +383,11 @@ export async function render(container, app) {
     const closeBtn = document.getElementById('closeModalBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     const submitBtn = document.getElementById('submitBtn');
-    const addPosBtn = document.getElementById('addPositionBtn');
     const filterBtns = document.querySelectorAll('.filter-btn');
 
     if (addBtn) addBtn.addEventListener('click', () => openAddCompanyModal(container));
     if (closeBtn) closeBtn.addEventListener('click', () => closeAddCompanyModal(container));
     if (cancelBtn) cancelBtn.addEventListener('click', () => closeAddCompanyModal(container));
-    if (addPosBtn) addPosBtn.addEventListener('click', addPositionField);
     if (submitBtn) submitBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         await handleAddCompany(container, currentFilter, app);
@@ -483,14 +414,16 @@ export async function render(container, app) {
         });
 
         container.querySelectorAll('.delete-company-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const compId = btn.dataset.companyId;
-                if (compId) {
-                    state.pendingDelete = compId;
-                    const modal = document.getElementById('deleteConfirmModal');
-                    if (modal) {
-                        modal.style.display = 'flex';
-                        document.body.style.overflow = 'hidden';
+                if (compId && confirm('Are you sure you want to delete this company? This will also remove associated jobs and placements. This action cannot be undone.')) {
+                    try {
+                        await api.delete(`/admin/company/${compId}`);
+                        // Re-render
+                        render(container, app);
+                    } catch (err) {
+                        console.error('Failed to delete company', err);
+                        alert('Failed to delete company.');
                     }
                 }
             });
@@ -498,49 +431,12 @@ export async function render(container, app) {
     }
     wireViewButtons();
 
-    // Modal Action Bindings
-    document.getElementById('confirmDeleteBtn')?.addEventListener('click', async () => {
-        if (!state.pendingDelete) return;
-        const compId = state.pendingDelete;
-        
-        const btn = document.getElementById('confirmDeleteBtn');
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Deleting...';
-        }
-
-        try {
-            await api.delete(`/admin/company/${compId}`);
-            closeDeleteModal();
-            render(container, app);
-        } catch (err) {
-            console.error('Failed to delete company', err);
-            alert('Failed to delete company.');
-            closeDeleteModal();
-        }
-    });
-
-    document.getElementById('cancelDeleteBtn')?.addEventListener('click', closeDeleteModal);
-    document.getElementById('closeSuccessBtn')?.addEventListener('click', closeSuccessModal);
-
-    // Close modals when clicking outside
-    [document.getElementById('deleteConfirmModal'), document.getElementById('successModal')].forEach(modal => {
-        if (modal) {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    if (modal.id === 'deleteConfirmModal') closeDeleteModal();
-                    else closeSuccessModal();
-                }
-            });
-        }
-    });
-
     // Filter functionality
     filterBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const filterType = btn.dataset.filter;
             currentFilter = filterType;
-            
+
             if (filterType === 'all') {
                 filteredData = [...companiesData];
             } else if (filterType === 'tier1') {
@@ -552,18 +448,18 @@ export async function render(container, app) {
             } else if (filterType === 'startup') {
                 filteredData = companiesData.filter(c => c.tier === 'Startup');
             }
-            
+
             // Update table
             const tableBody = document.getElementById('companiesTableBody');
             if (tableBody) {
                 tableBody.innerHTML = renderTable();
                 wireViewButtons();
             }
-            
+
             // Update filter buttons
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            
+
             // Update counter
             const counterDiv = document.getElementById('companiesCounter');
             if (counterDiv) {

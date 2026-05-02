@@ -442,13 +442,13 @@ function bindModalEvents(container, app) {
     const studentModal = document.getElementById('addStudentModal');
     const coordModal = document.getElementById('addCoordModal');
     const openBtn = document.getElementById('user-add-btn');
-    
+
     function openModal() {
         const modal = state.filters.viewRole === 'Student' ? studentModal : coordModal;
         if (modal) {
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
-            
+
             if (state.filters.viewRole === 'Student') {
                 const dobInput = document.getElementById('studentDob');
                 if (dobInput) {
@@ -456,7 +456,7 @@ function bindModalEvents(container, app) {
                     const maxDate = new Date(today.getFullYear() - 16, today.getMonth(), today.getDate());
                     dobInput.max = maxDate.toISOString().split('T')[0];
                 }
-                
+
                 // Reset placed fields
                 const placedFields = document.getElementById('placedFields');
                 if (placedFields) placedFields.style.display = 'none';
@@ -504,14 +504,14 @@ function bindModalEvents(container, app) {
     if (studentForm) {
         studentForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const name  = document.getElementById('studentName').value.trim();
+
+            const name = document.getElementById('studentName').value.trim();
             const email = document.getElementById('studentEmail').value.trim();
             const phone = document.getElementById('studentPhone').value.trim();
-            const dob   = document.getElementById('studentDob').value || null;
-            const dept  = document.getElementById('studentDept').value;
+            const dob = document.getElementById('studentDob').value || null;
+            const dept = document.getElementById('studentDept').value;
             const gradYear = document.getElementById('studentGradYear').value;
-            const cgpa  = document.getElementById('studentCgpa').value || null;
+            const cgpa = document.getElementById('studentCgpa').value || null;
             const profileStatus = document.getElementById('studentProfileStatus').value;
             const company = document.getElementById('studentCompany')?.value || null;
             const packageLpa = document.getElementById('studentPackage')?.value || null;
@@ -532,8 +532,8 @@ function bindModalEvents(container, app) {
                 const birthDate = new Date(dob);
                 const today = new Date();
                 const age = today.getFullYear() - birthDate.getFullYear() -
-                    ((today.getMonth() < birthDate.getMonth() || 
-                      (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) ? 1 : 0);
+                    ((today.getMonth() < birthDate.getMonth() ||
+                        (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) ? 1 : 0);
                 if (age < 16) {
                     alert('Student must be at least 16 years old.');
                     return;
@@ -546,8 +546,8 @@ function bindModalEvents(container, app) {
                 submitBtn.textContent = 'Saving...';
             }
 
-            const payload = { 
-                name, email, phone, dob, dept, 
+            const payload = {
+                name, email, phone, dob, dept,
                 graduation_yr: gradYear, cgpa, profile_status: profileStatus,
                 company, packageLpa
             };
@@ -574,10 +574,10 @@ function bindModalEvents(container, app) {
         coordForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const name    = document.getElementById('coordName').value.trim();
-            const email   = document.getElementById('coordEmail').value.trim();
-            const phone   = document.getElementById('coordPhone').value.trim();
-            const dept    = document.getElementById('coordDept').value;
+            const name = document.getElementById('coordName').value.trim();
+            const email = document.getElementById('coordEmail').value.trim();
+            const phone = document.getElementById('coordPhone').value.trim();
+            const dept = document.getElementById('coordDept').value;
             const cgdc_id = document.getElementById('coordCgdcId').value || null;
 
             // JS-side validation
@@ -620,7 +620,7 @@ function bindModalEvents(container, app) {
         if (deleteBtn) {
             const role = deleteBtn.dataset.role;
             const id = deleteBtn.dataset.id;
-            
+
             // Show custom modal
             state.pendingDelete = { id, role };
             const modal = document.getElementById('deleteConfirmModal');
@@ -637,7 +637,7 @@ function bindModalEvents(container, app) {
     document.getElementById('confirmDeleteBtn')?.addEventListener('click', async () => {
         if (!state.pendingDelete) return;
         const { id, role } = state.pendingDelete;
-        
+
         const btn = document.getElementById('confirmDeleteBtn');
         if (btn) {
             btn.disabled = true;
@@ -774,13 +774,13 @@ function renderRow(user, serial) {
             ${includeBranch ? `<td>${user.branch || '-'}</td>` : ''}
             <td>${user.entityId}</td>
             <td><span class="tag ${getStatusTag(user.status)}">${formatStatusLabel(user.status)}</span></td>
-            ${(user.role.toLowerCase() === 'student' || user.role.toLowerCase() === 'coordinator') ? 
-                `<td style="text-align: right;">
+            ${(user.role.toLowerCase() === 'student' || user.role.toLowerCase() === 'coordinator') ?
+            `<td style="text-align: right;">
                     <button class="user-delete-btn" data-role="${user.role.toLowerCase()}" data-id="${user.entityIdRaw}" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem; padding: 4px;">
                         <ion-icon name="trash-outline"></ion-icon>
                     </button>
                 </td>` : '<td></td>'
-            }
+        }
         </tr>
     `;
 }
@@ -816,9 +816,9 @@ function renderPagination(total, pages) {
             <ion-icon name="chevron-back-outline"></ion-icon>
         </button>
         ${pageButtons.map((item) => {
-            if (item === '...') return `<span class="admin-page-ellipsis">...</span>`;
-            return `<button class="admin-page-btn ${item === state.currentPage ? 'active' : ''}" data-page="${item}">${item}</button>`;
-        }).join('')}
+        if (item === '...') return `<span class="admin-page-ellipsis">...</span>`;
+        return `<button class="admin-page-btn ${item === state.currentPage ? 'active' : ''}" data-page="${item}">${item}</button>`;
+    }).join('')}
         <button class="admin-page-btn" data-page="next" ${state.currentPage === pages ? 'disabled' : ''}>
             <ion-icon name="chevron-forward-outline"></ion-icon>
         </button>
@@ -942,12 +942,12 @@ function configureFiltersForRole() {
         if (branchField) branchField.style.display = 'block';
         if (permissionField) permissionField.style.display = 'none';
         setSelectOptions('user-status-filter', [
-            {value: 'all', label: 'All'},
-            {value: 'active', label: 'Active'},
-            {value: 'placed', label: 'Placed'},
-            {value: 'rejected', label: 'Rejected'},
-            {value: 'opted_out', label: 'Opted Out'},
-            {value: 'not_eligible', label: 'Not Eligible'}
+            { value: 'all', label: 'All' },
+            { value: 'active', label: 'Active' },
+            { value: 'placed', label: 'Placed' },
+            { value: 'rejected', label: 'Rejected' },
+            { value: 'opted_out', label: 'Opted Out' },
+            { value: 'not_eligible', label: 'Not Eligible' }
         ]);
         state.filters.permission = 'all';
     }
@@ -961,11 +961,11 @@ function setSelectOptions(selectId, values) {
     select.innerHTML = values.map((item) => {
         const value = typeof item === 'object' ? item.value : item;
         let label = typeof item === 'object' ? item.label : (value === 'all' ? 'All' : value);
-        
+
         // Pretty labels for short branch names if desired, but keep value as DB name
         if (value === 'IT') label = 'Information Technology (IT)';
         if (value === 'Electronics') label = 'Electronics & Communication';
-        
+
         return `<option value="${value}">${label}</option>`;
     }).join('');
 
@@ -1000,4 +1000,12 @@ function getDefaultFilters() {
 function resetUsersState() {
     state.currentPage = 1;
     state.filters = getDefaultFilters();
+}
+
+export function search(query) {
+    state.filters.query = query.toLowerCase().trim();
+    state.currentPage = 1;
+    const input = document.getElementById('user-search');
+    if (input) input.value = query;
+    renderTable();
 }

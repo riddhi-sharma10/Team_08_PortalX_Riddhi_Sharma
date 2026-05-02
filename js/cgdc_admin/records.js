@@ -3,6 +3,7 @@ import { api } from '../api.js';
 
 let allRecords = [];
 let availableYears = [];
+let containerRef = null;
 
 const recordsState = {
     query: '',
@@ -10,11 +11,6 @@ const recordsState = {
     department: 'all',
     selectedYear: 'all'
 };
-
-export async function render(container, app) {
-    await fetchRecords(container);
-    renderPage(container, app);
-}
 
 async function fetchRecords(container) {
     if (container) {
@@ -45,7 +41,7 @@ async function fetchRecords(container) {
         allRecords = [];
         availableYears = [];
     }
-    
+
     // Ensure 2024, 2025, 2026 are always available for the filter dropdown
     const requiredYears = [2026, 2025, 2024];
     requiredYears.forEach(y => {
@@ -186,7 +182,7 @@ function renderPage(container, app) {
                         <h3>Placement Records</h3>
                         <span>Live data from the database</span>
                     </div>
-                    <span class="admin-record-pill">${formatNumber(filteredRecords.length)} / ${formatNumber(allRecords.length)} entries</span>
+                    <span id="admin-record-count-pill" class="admin-record-pill">${formatNumber(filteredRecords.length)} / ${formatNumber(allRecords.length)} entries</span>
                 </div>
 
                 <div class="admin-record-controls">
@@ -241,7 +237,7 @@ function renderPage(container, app) {
                                         <td><span class="tag ${getStatusTag(record.status)}">${record.status}</span></td>
                                     </tr>
                                 `).join('')
-                                : `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No records match your filters.</td></tr>`}
+            : `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No records match your filters.</td></tr>`}
                         </tbody>
                     </table>
                 </div>
@@ -260,8 +256,8 @@ function bindInteractions(container, app) {
     });
 
     container.querySelector('#admin-record-search')?.addEventListener('input', (event) => {
-        recordsState.query = event.target.value.trim();
-        renderPage(container, app);
+        recordsState.query = event.target.value;
+        updateTableOnly();
     });
 
     container.querySelector('#admin-record-status-filter')?.addEventListener('change', (event) => {
@@ -280,6 +276,47 @@ function bindInteractions(container, app) {
             renderPage(container, app);
         });
     });
+}
+
+function updateTableOnly() {
+    const tbody = containerRef.querySelector('tbody');
+    const pill = document.getElementById('admin-record-count-pill');
+    if (!tbody) return;
+    
+    const filteredRecords = getFilteredRecords(allRecords);
+    
+    // Update the counter pill
+    if (pill) {
+        pill.textContent = `${formatNumber(filteredRecords.length)} / ${formatNumber(allRecords.length)} entries`;
+    }
+
+    tbody.innerHTML = filteredRecords.length ? filteredRecords.map((record) => `
+        <tr>
+            <td>
+                <div class="admin-record-student">
+                    <div class="admin-record-avatar">${record.initials}</div>
+                    <strong>${record.student}</strong>
+                </div>
+            </td>
+            <td>${record.department}</td>
+            <td>${record.company}</td>
+            <td>${record.packageLpa.toFixed(1)}</td>
+            <td><span class="tag ${getStatusTag(record.status)}">${record.status}</span></td>
+        </tr>
+    `).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No records match your filters.</td></tr>`;
+}
+
+export function search(query) {
+    recordsState.query = query;
+    const input = document.getElementById('admin-record-search');
+    if (input) input.value = query;
+    updateTableOnly();
+}
+
+export async function render(container, app) {
+    containerRef = container;
+    await fetchRecords(container);
+    renderPage(container, app);
 }
 
 function getFilteredRecords(records) {

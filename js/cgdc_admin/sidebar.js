@@ -3,7 +3,7 @@
 export const Sidebar = {
     render(role, app) {
         const sidebar = document.getElementById('sidebar');
-        
+
         const menuItems = {
             student: [
                 { id: 'dashboard', label: 'Dashboard', icon: 'grid-outline' },
@@ -22,8 +22,9 @@ export const Sidebar = {
             cgdc_admin: [
                 { id: 'dashboard', label: 'Dashboard', icon: 'grid-outline' },
                 { id: 'users', label: 'User Directory', icon: 'people-circle-outline' },
+                { id: 'assignments', label: 'Delegation Portal', icon: 'git-network-outline' },
                 { id: 'analytics', label: 'Reports & Analytics', icon: 'bar-chart-outline' },
-                { id: 'companies', label: 'Registered Cos.', icon: 'business-outline' },
+                { id: 'companies', label: 'Partner Companies', icon: 'business-outline' },
                 { id: 'records', label: 'Placement Records', icon: 'document-text-outline' }
             ]
         };
@@ -90,10 +91,10 @@ export const Sidebar = {
                     </div>
                 </div>
             `;
-            
+
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             const modal = document.getElementById('logout-modal');
-            
+
             // Add hover effects dynamically
             const cancelBtn = document.getElementById('logout-cancel-btn');
             const confirmBtn = document.getElementById('logout-confirm-btn');

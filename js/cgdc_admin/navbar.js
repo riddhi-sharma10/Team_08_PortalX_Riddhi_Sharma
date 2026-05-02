@@ -5,11 +5,11 @@ export const Navbar = {
         const navbar = document.getElementById('top-navbar');
         // Double check name and remove potential "User " prefix from old sessions
         const cleanName = user.name.replace(/^User\s+/i, '');
-        
+
         navbar.innerHTML = `
             <div class="search-bar">
                 <ion-icon name="search-outline"></ion-icon>
-                <input type="text" placeholder="Search for jobs, companies or students...">
+                <input id="global-search-input" type="text" placeholder="Search for jobs, companies or students...">
             </div>
             <div class="nav-actions">
                 <div class="icon-btn" id="nav-notifications" style="cursor: pointer;">
@@ -47,7 +47,14 @@ export const Navbar = {
 
         // Add hover effect
         const profileLink = document.getElementById('nav-profile-link');
-        profileLink.addEventListener('mouseenter', () => profileLink.style.opacity = '0.7');
         profileLink.addEventListener('mouseleave', () => profileLink.style.opacity = '1');
+
+        // Global Search
+        const searchInput = document.getElementById('global-search-input');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                window.App.handleGlobalSearch(e.target.value);
+            });
+        }
     }
 };
