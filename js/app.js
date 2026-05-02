@@ -50,6 +50,9 @@ const App = {
             sidebar.style.width = newWidth + 'px';
             document.documentElement.style.setProperty('--sidebar-width', newWidth + 'px');
             localStorage.setItem(STORAGE_KEY, newWidth);
+
+            // Trigger window resize to force responsive elements (like Charts) to update
+            window.dispatchEvent(new Event('resize'));
         });
 
         window.addEventListener('mouseup', () => {
