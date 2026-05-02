@@ -57,5 +57,27 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(body)
     }),
-    delete: (path) => request(path, { method: 'DELETE' })
+    delete: (path) => request(path, { method: 'DELETE' }),
+
+    // For multipart/form-data uploads (e.g. PDF resume)
+    // Do NOT set Content-Type here — browser sets it automatically with the correct boundary
+    postForm: async (path, formData) => {
+        const token = localStorage.getItem('placement_token');
+        const response = await fetch(BASE_URL + path, {
+            method: 'POST',
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+            body: formData,
+        });
+        if (response.status === 401) {
+            localStorage.removeItem('placement_token');
+            localStorage.removeItem('placement_user');
+            window.location.reload();
+            return;
+        }
+        const text = await response.text();
+        let data;
+        try { data = JSON.parse(text); } catch (e) { throw new Error('Server returned an invalid response.'); }
+        if (!response.ok) throw new Error(data.error || data.message || 'Request failed');
+        return data;
+    }
 };
