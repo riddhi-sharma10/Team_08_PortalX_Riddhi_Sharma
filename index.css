@@ -1914,3 +1914,181 @@ tr:hover {
     border-color: #1b3a6b;
     box-shadow: 0 2px 8px rgba(27, 58, 107, 0.2);
 }
+
+/* --- Queries Explorer --- */
+.explorer-card {
+    margin-bottom: 24px;
+}
+
+.explorer-controls {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr auto;
+    gap: 20px;
+    align-items: flex-end;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.control-group label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.control-group select {
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #f8fafc;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    outline: none;
+    cursor: pointer;
+}
+
+.control-group select:focus {
+    border-color: var(--primary);
+}
+
+.sql-box-container {
+    margin-top: 20px;
+    background: #1e293b;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.sql-header {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.sql-header button {
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+}
+
+.sql-code {
+    padding: 20px;
+    color: #e2e8f0;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.meta-desc {
+    margin-top: 16px;
+    padding-left: 12px;
+    border-left: 3px solid var(--accent);
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.results-container {
+    min-height: 200px;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    color: var(--text-muted);
+    background: var(--white);
+    border-radius: 16px;
+    border: 2px dashed var(--border);
+}
+
+.empty-state ion-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.3;
+}
+
+.null-val {
+    color: var(--danger);
+    font-size: 0.7rem;
+    font-weight: 800;
+    font-style: italic;
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.table-card {
+    background: var(--white);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+}
+
+.table-footer {
+    padding: 12px 20px;
+    background: #f8fafc;
+    border-top: 1px solid var(--border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+/* --- Analytics Header & Titles --- */
+.analytics-header {
+    margin-bottom: 32px;
+    padding-top: 0px; /* Shifted up */
+    margin-top: -10px; /* Pull it slightly up */
+}
+
+.analytics-title {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.analytics-title ion-icon {
+    font-size: 2.2rem;
+    color: var(--primary);
+    /* Removed background and box-shadow */
+}
+
+.analytics-title h1 {
+    font-size: 1.8rem;
+    color: var(--primary);
+    margin-bottom: 2px;
+}
+
+.analytics-title p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 20px; /* Space after subheading */
+}
+

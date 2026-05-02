@@ -12,12 +12,14 @@ export const Sidebar = {
                 { id: 'applications', label: 'Applications', icon: 'document-text-outline' },
                 { id: 'history', label: 'Archives', icon: 'time-outline' },
                 { id: 'ats', label: 'ATS Performance', icon: 'analytics-outline' },
+                { id: 'queries', label: 'Queries', icon: 'code-working-outline' },
             ],
             coordinator: [
                 { id: 'dashboard', label: 'Dashboard', icon: 'speedometer-outline' },
                 { id: 'jobs', label: 'Job Profiles', icon: 'layers-outline' },
                 { id: 'applications', label: 'App Management', icon: 'people-outline' },
                 { id: 'company', label: 'Company View', icon: 'business-outline' },
+                { id: 'queries', label: 'Queries', icon: 'code-working-outline' },
             ],
             admin: [
                 { id: 'dashboard', label: 'Dashboard', icon: 'grid-outline' },
@@ -25,6 +27,7 @@ export const Sidebar = {
                 { id: 'analytics', label: 'Reports & Analytics', icon: 'bar-chart-outline' },
                 { id: 'companies', label: 'Registered Cos.', icon: 'business-outline' },
                 { id: 'records', label: 'Placement Records', icon: 'archive-outline' },
+                { id: 'queries', label: 'Queries Explorer', icon: 'code-working-outline' },
             ]
         };
 

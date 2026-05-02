@@ -80,4 +80,33 @@ HAVING student_count > 50;
 ---
 
 ## ✅ Implementation Status
-All above routes are **Live** and **Synced** with the MySQL database. They utilize the `pool.query()` method in the Node.js backend to provide real-time aggregate filtering.
+
+---
+
+## 🧪 How to Verify Manually (Database Testing)
+
+To verify the **HAVING** clause logic manually in your SQL client (like MySQL Workbench), you can run a comparison test. This demonstrates why `HAVING` is required for aggregate data instead of `WHERE`.
+
+### The "Top Recruiters" Test
+Run this query to find companies that have placed at least **3 students**:
+
+```sql
+SELECT 
+    c.comp_name AS company, 
+    COUNT(pr.record_id) AS hire_count
+FROM COMPANY c
+JOIN PLACEMENT_RECORD pr ON c.comp_id = pr.comp_id
+GROUP BY c.comp_id, c.comp_name
+HAVING hire_count >= 3;
+```
+
+### 💡 Why this proves the implementation:
+1.  **Try using WHERE**: If you replace `HAVING hire_count >= 3` with `WHERE hire_count >= 3`, the database will throw an **ERROR**.
+    *   *Reason:* `WHERE` filters individual rows *before* they are grouped. Since `hire_count` is a result of a `COUNT()` function (an aggregate), it doesn't exist yet when `WHERE` is running.
+2.  **The Result**: The `HAVING` clause correctly waits until the grouping is finished and then filters the results.
+
+### Summary of Differences
+| Clause | Used For | Timing |
+| :--- | :--- | :--- |
+| **WHERE** | Filtering individual rows | Before `GROUP BY` |
+| **HAVING** | Filtering groups/aggregates | After `GROUP BY` |
