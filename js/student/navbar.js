@@ -45,6 +45,17 @@ export const Navbar = {
             window.App.navigateTo('profile');
         });
 
+        // Search Input
+        const searchInput = navbar.querySelector('.search-bar input');
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const query = searchInput.value.trim();
+                if (query) {
+                    window.App.handleGlobalSearch(query);
+                }
+            }
+        });
+
         // Add hover effect
         const profileLink = document.getElementById('nav-profile-link');
         profileLink.addEventListener('mouseenter', () => profileLink.style.opacity = '0.7');

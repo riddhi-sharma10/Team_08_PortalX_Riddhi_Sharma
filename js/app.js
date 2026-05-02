@@ -11,7 +11,55 @@ const App = {
 
     init() {
         console.log("Placement Portal Initialized");
+        this.setupResizer();
         this.checkAuth();
+    },
+
+    setupResizer() {
+        const sidebar = document.getElementById('sidebar');
+        const resizer = document.getElementById('sidebar-resizer');
+        const STORAGE_KEY = 'sidebar_width';
+
+        // Load saved width
+        const savedWidth = localStorage.getItem(STORAGE_KEY);
+        if (savedWidth) {
+            sidebar.style.width = savedWidth + 'px';
+            document.documentElement.style.setProperty('--sidebar-width', savedWidth + 'px');
+        }
+
+        if (!resizer || !sidebar) return;
+
+        let isResizing = false;
+
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            resizer.classList.add('resizing');
+            // Prevent text selection during drag
+            document.body.style.userSelect = 'none';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            let newWidth = e.clientX;
+            // Constrain width
+            if (newWidth < 180) newWidth = 180;
+            if (newWidth > 500) newWidth = 500;
+
+            sidebar.style.width = newWidth + 'px';
+            document.documentElement.style.setProperty('--sidebar-width', newWidth + 'px');
+            localStorage.setItem(STORAGE_KEY, newWidth);
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = 'default';
+                resizer.classList.remove('resizing');
+                document.body.style.userSelect = 'auto';
+            }
+        });
     },
 
     checkAuth() {
@@ -105,6 +153,23 @@ const App = {
         sessionStorage.setItem('selectedCompany', companyName);
         // Navigate to company view
         this.navigateTo('company_view');
+    },
+
+    handleGlobalSearch(query) {
+        console.log("Global search for:", query);
+        
+        // If the current page module has a 'search' method, use it
+        if (this.currentModule && this.currentModule.search) {
+            this.currentModule.search(query);
+            return;
+        }
+
+        // Otherwise, redirect to Opportunities (or Companies for Admin) and search there
+        const searchPage = (this.state.role === 'admin') ? 'companies' : 'opportunities';
+        
+        // We can pass the search query via session storage or URL (if we had a router)
+        sessionStorage.setItem('pendingSearch', query);
+        this.navigateTo(searchPage);
     }
 };
 

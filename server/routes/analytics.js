@@ -56,19 +56,36 @@ router.get('/students-with-applications', requireAuth, async (req, res) => {
 // 3. Get Full Placement History (for Student History page)
 router.get('/history', requireAuth, async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM vw_accurate_visit_history ORDER BY academic_year DESC');
+        const [rows] = await pool.query(`
+            SELECT 
+                vh.academic_year as year,
+                COALESCE(pr.stream, 'General') as dept,
+                c.comp_name,
+                COALESCE(j.role, 'N/A') as role,
+                COUNT(pr.record_id) as placed,
+                COALESCE(MAX(pr.salary_offered), 0) as highest,
+                COALESCE(AVG(pr.salary_offered), 0) as average
+            FROM COMPANY_VISIT_HISTORY vh
+            JOIN COMPANY c ON vh.comp_id = c.comp_id
+            LEFT JOIN PLACEMENT_RECORD pr ON vh.comp_id = pr.comp_id AND vh.academic_year = pr.academic_year
+            LEFT JOIN JOB_PROFILE j ON pr.job_id = j.job_id
+            GROUP BY vh.academic_year, dept, c.comp_name, role
+            ORDER BY vh.academic_year DESC, c.comp_name ASC
+        `);
         
         const transformed = rows.map(r => ({
-            year: r.academic_year.toString(),
+            year: r.year.toString(),
+            dept: r.dept,
             comp_name: r.comp_name,
-            placed: r.actual_students_placed,
-            highest: `₹${r.actual_highest_salary} LPA`,
-            average: `₹${r.actual_avg_salary} LPA`
+            role: r.role,
+            placed: r.placed,
+            highest: r.highest > 0 ? `₹${Number(r.highest).toFixed(2)} LPA` : 'N/A',
+            average: r.average > 0 ? `₹${Number(r.average).toFixed(2)} LPA` : 'N/A'
         }));
 
         res.json(transformed);
     } catch (err) {
-        console.error(err);
+        console.error('History Sync Error:', err);
         res.status(500).json({ message: 'Error fetching placement history' });
     }
 });

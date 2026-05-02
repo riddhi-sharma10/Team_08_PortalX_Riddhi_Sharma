@@ -80,8 +80,28 @@ h3,
   display: flex;
   flex-direction: column;
   height: 100vh;
-  transition: all 0.3s ease;
+  /* Remove fixed transition for resize performance */
+  transition: background 0.3s ease;
   flex-shrink: 0;
+  overflow-x: hidden;
+  position: relative;
+}
+
+#sidebar-resizer {
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  height: 100vh;
+  flex-shrink: 0;
+  transition: background 0.2s;
+  z-index: 100;
+  border-left: 1px solid rgba(255,255,255,0.05);
+}
+
+#sidebar-resizer:hover,
+#sidebar-resizer.resizing {
+  background: var(--accent);
+  width: 6px;
 }
 
 .sidebar-header {
@@ -1560,11 +1580,41 @@ tr:hover {
     color: var(--white);
     display: flex;
     align-items: center;
-    gap: 40px;
+    justify-content: flex-start;
+    gap: 16px; /* Even smaller gap */
+    padding: 30px; /* Reduced padding */
     margin-bottom: 40px;
     position: relative;
     overflow: hidden;
     box-shadow: var(--shadow-lg);
+    flex-wrap: nowrap;
+}
+
+@media (max-width: 1200px) {
+    .profile-header-banner {
+        flex-wrap: wrap; /* Allow wrapping on medium screens */
+        gap: 30px;
+        padding: 30px;
+    }
+}
+
+@media (max-width: 992px) {
+    .profile-header-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+        gap: 24px;
+    }
+    
+    .profile-info-main {
+        width: 100%;
+    }
+
+    .profile-header-banner div[style*="margin-left: auto"] {
+        margin-left: 0 !important;
+        width: 100%;
+        justify-content: space-between;
+    }
 }
 
 .profile-avatar-wrapper {
@@ -1573,11 +1623,11 @@ tr:hover {
 }
 
 .profile-avatar-wrapper img {
-    width: 140px;
-    height: 140px;
-    border-radius: 20px;
+    width: 110px; /* Smaller avatar */
+    height: 110px;
+    border-radius: 18px;
     object-fit: cover;
-    border: 4px solid rgba(255,255,255,0.2);
+    border: 3px solid rgba(255,255,255,0.2);
     background: var(--white);
 }
 
@@ -1603,21 +1653,24 @@ tr:hover {
 
 .profile-info-main {
     flex: 1;
+    min-width: 0;
 }
 
 .profile-info-main h1 {
-    font-size: 2.8rem;
+    font-size: 2.2rem; /* Scaled down name */
     font-weight: 700;
     color: var(--white);
-    margin-bottom: 8px;
-    letter-spacing: -1px;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+    white-space: nowrap;
 }
 
 .profile-info-meta {
     display: flex;
     align-items: center;
-    gap: 16px;
-    font-size: 1rem;
+    gap: 10px;
+    font-size: 0.9rem; /* Scaled down meta */
+    white-space: nowrap;
     opacity: 0.8;
 }
 
@@ -1644,6 +1697,67 @@ tr:hover {
 
 .btn-profile-edit:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+.profile-meta-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8rem;
+    opacity: 0.9;
+    background: rgba(255,255,255,0.1);
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.15);
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.profile-meta-box span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profile-stats-box {
+    margin-left: auto;
+    display: flex;
+    gap: 16px; /* Reduced gap */
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 12px 20px; /* Reduced padding */
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    flex-shrink: 1; /* Allow it to shrink if needed */
+}
+
+.profile-stats-box > div > div:first-child {
+    font-size: 1.3rem !important; /* Scale down stat numbers */
+}
+
+.profile-stats-box > div > div:last-child {
+    font-size: 0.6rem !important; /* Scale down stat labels */
+}
+
+@media (max-width: 1200px) {
+    .profile-stats-box {
+        gap: 20px;
+        padding: 16px 24px;
+    }
+}
+
+@media (max-width: 992px) {
+    .profile-meta-box {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    
+    .profile-stats-box {
+        margin-left: 0;
+        width: 100%;
+        justify-content: space-around;
+        padding: 20px;
+    }
 }
 /* --- Companies Page --- */
 .companies-filters {

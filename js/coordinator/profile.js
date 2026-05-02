@@ -56,7 +56,7 @@ function renderShell(container, app) {
                         </div>
                     </div>
                     
-                    <div style="display: flex; align-items: center; gap: 12px; font-size: 0.85rem; opacity: 0.9; background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 20px; width: fit-content; border: 1px solid rgba(255,255,255,0.15);">
+                    <div class="profile-meta-box">
                         <ion-icon name="business-outline" style="font-size: 1.1rem;"></ion-icon>
                         <span style="font-weight: 600; letter-spacing: 0.5px;">${coordProfile.department}</span>
                         <span style="opacity: 0.5; margin: 0 4px;">|</span>
@@ -65,7 +65,7 @@ function renderShell(container, app) {
                     </div>
                 </div>
 
-                <div style="margin-left: auto; display: flex; gap: 24px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 20px 28px; border-radius: 20px; backdrop-filter: blur(10px);">
+                <div class="profile-stats-box">
                     <div style="text-align: center;">
                         <div style="font-size: 1.6rem; font-weight: 700; color: #93c5fd; line-height: 1;">${coordProfile.studentsManaged || 0}</div>
                         <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: 8px;">Students</div>
@@ -78,7 +78,7 @@ function renderShell(container, app) {
                     <div style="width: 1px; background: rgba(255,255,255,0.1);"></div>
                     <div style="text-align: center;">
                         <div style="font-size: 1.6rem; font-weight: 700; color: #fcd34d; line-height: 1;">${rate}%</div>
-                        <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: 8px;">Placement Rate</div>
+                        <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: 8px;">Rate</div>
                     </div>
                 </div>
             </div>
