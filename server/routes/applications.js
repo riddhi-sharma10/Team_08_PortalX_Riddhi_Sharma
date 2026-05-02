@@ -40,6 +40,7 @@ router.get('/', requireAuth, async (req, res) => {
     }
 });
 
+
 // POST /api/applications - Submit a new application
 router.post('/', requireAuth, async (req, res) => {
     try {
@@ -69,6 +70,8 @@ router.post('/', requireAuth, async (req, res) => {
             return res.status(403).json({ message: `Your CGPA (${studentCGPA}) does not meet the criteria (${requiredCGPA}).` });
         }
 
+        // Check if already applied
+        const [existing] = await pool.query('SELECT app_id FROM APPLICATION WHERE s_id = ? AND job_id = ?', [student_id, job_id]);
         if (existing.length > 0) {
             return res.status(400).json({ message: 'You have already applied for this position.' });
         }
@@ -83,6 +86,55 @@ router.post('/', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('SUBMIT_ERROR:', err);
         res.status(500).json({ message: 'Error submitting application: ' + err.message });
+    }
+});
+
+// POST /api/applications/withdraw - Withdraw an application
+router.post('/withdraw', requireAuth, async (req, res) => {
+    if (req.user.role !== 'student') return res.status(403).json({ message: 'Access denied' });
+    
+    const conn = await pool.getConnection();
+    try {
+        const { job_id } = req.body;
+        const student_id = req.user.entityId;
+
+        await conn.beginTransaction();
+
+        // 1. Verify application exists and is not already processed
+        const [app] = await conn.query(
+            "SELECT status FROM APPLICATION WHERE s_id = ? AND job_id = ? FOR UPDATE",
+            [student_id, job_id]
+        );
+
+        if (app.length === 0) {
+            throw new Error('Application not found.');
+        }
+
+        if (['selected', 'placed'].includes(app[0].status)) {
+            throw new Error('Cannot withdraw an application that has already been selected or placed.');
+        }
+
+        // 2. CRITERION 12: ATOMIC WITHDRAWAL
+        // Update application status
+        await conn.query(
+            "UPDATE APPLICATION SET status = 'withdrawn' WHERE s_id = ? AND job_id = ?",
+            [student_id, job_id]
+        );
+
+        // 3. Cancel any upcoming interviews for this specific job
+        await conn.query(
+            "DELETE FROM INTERVIEW WHERE s_id = ? AND job_id = ? AND interview_date >= CURDATE()",
+            [student_id, job_id]
+        );
+
+        await conn.commit();
+        res.json({ message: 'Application withdrawn and interviews cancelled.' });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        console.error('WITHDRAW_ERROR:', err);
+        res.status(500).json({ message: err.message });
+    } finally {
+        if (conn) conn.release();
     }
 });
 

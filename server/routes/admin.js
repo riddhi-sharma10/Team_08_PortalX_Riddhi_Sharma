@@ -989,6 +989,41 @@ function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// DELETE /admin/company/:id (Transaction)
+router.delete('/company/:id', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        const { id } = req.params;
+        await conn.beginTransaction();
+
+        // CRITERION 12: ATOMIC CLEANUP
+        // 1. Delete all applications for this company's jobs
+        await conn.query(`
+            DELETE FROM APPLICATION 
+            WHERE job_id IN (SELECT job_id FROM JOB_PROFILE WHERE comp_id = ?)
+        `, [id]);
+
+        // 2. Delete all job profiles for this company
+        await conn.query('DELETE FROM JOB_PROFILE WHERE comp_id = ?', [id]);
+
+        // 3. Delete the company itself
+        const [result] = await conn.query('DELETE FROM COMPANY WHERE comp_id = ?', [id]);
+
+        if (result.affectedRows === 0) {
+            throw new Error('Company not found');
+        }
+
+        await conn.commit();
+        res.json({ message: 'Company and all associated jobs/applications deleted successfully.' });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        console.error('Company Delete Error:', err);
+        res.status(500).json({ message: err.message });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 // Catch-all 404 for admin routes to prevent HTML responses
 router.use((req, res) => {
     res.status(404).json({ message: `Admin route not found: ${req.method} ${req.originalUrl}` });

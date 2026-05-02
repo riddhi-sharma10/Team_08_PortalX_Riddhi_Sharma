@@ -43,7 +43,7 @@ router.get('/dashboard', async (req, res) => {
         const tPlaced = Number(placedCount[0]?.total || 0);
         const tOptedOut = Number(optedOutCount[0]?.total || 0);
         const tActive = Math.max(0, tStudents - tPlaced - tOptedOut);
-        
+
         const placementRate = tStudents > 0 ? ((tPlaced / tStudents) * 100).toFixed(1) : '0.0';
 
         res.json({
@@ -158,7 +158,7 @@ router.patch('/applications/:id/status', async (req, res) => {
             await conn.query('SELECT s_id FROM STUDENT WHERE s_id = ? FOR UPDATE', [app[0].s_id]);
 
             await conn.query('UPDATE APPLICATION SET status = ? WHERE app_id = ?', [status, id]);
-            
+
             await conn.commit();
             res.json({ message: 'Status updated successfully' });
         } catch (e) {
@@ -289,7 +289,51 @@ router.get('/placements', async (req, res) => {
     }
 });
 
-// --- 7. Profile ---
+// --- 7. Create Job Profile with Details (Transaction) ---
+router.post('/jobs', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        const { comp_id, role, package: pkg, eligibility_cgpa, job_type, app_deadline, skills, branches } = req.body;
+        
+        if (!comp_id || !role || !pkg) {
+            return res.status(400).json({ message: 'Missing core job details' });
+        }
+
+        await conn.beginTransaction();
+
+        // 1. Insert Job Profile
+        const [jobRes] = await conn.query(`
+            INSERT INTO JOB_PROFILE (comp_id, role, package, eligibility_cgpa, status, job_type, app_deadline)
+            VALUES (?, ?, ?, ?, 'open', ?, ?)
+        `, [comp_id, role, pkg, eligibility_cgpa || 0, job_type || 'full_time', app_deadline || null]);
+
+        const jobId = jobRes.insertId;
+
+        // 2. CRITERION 12: MULTI-TABLE INSERT
+        // Insert Required Skills (Bulk)
+        if (skills && skills.length) {
+            const skillRows = skills.map(s => [jobId, s]);
+            await conn.query('INSERT INTO JOB_REQUIRED_SKILL (job_id, skill_name) VALUES ?', [skillRows]);
+        }
+
+        // 3. Insert Eligible Branches (Bulk)
+        if (branches && branches.length) {
+            const branchRows = branches.map(b => [jobId, b]);
+            await conn.query('INSERT INTO JOB_ELIGIBILITY_BRANCH (job_id, branch_name) VALUES ?', [branchRows]);
+        }
+
+        await conn.commit();
+        res.status(201).json({ message: 'Job profile and requirements posted successfully.', jobId });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        console.error('Job Post Error:', err);
+        res.status(500).json({ message: 'Failed to post job: ' + err.message });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+// --- 8. Profile ---
 router.get('/profile', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
