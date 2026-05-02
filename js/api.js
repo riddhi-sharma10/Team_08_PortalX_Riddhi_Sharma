@@ -44,7 +44,11 @@ async function request(path, options = {}) {
 
 // Export simple methods for all pages to use
 export const api = {
-    get: (path) => request(path),
+    get: (path) => {
+        // Add a timestamp cache-buster to ensure fresh data
+        const sep = path.includes('?') ? '&' : '?';
+        return request(`${path}${sep}_t=${Date.now()}`);
+    },
     post: (path, body) => request(path, {
         method: 'POST',
         body: JSON.stringify(body)

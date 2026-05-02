@@ -13,6 +13,36 @@ const App = {
         console.log("Placement Portal Initialized");
         this.setupResizer();
         this.checkAuth();
+        this.setupTabSync();
+    },
+
+    setupTabSync() {
+        // Re-fetch data on tab switch back
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && this.state.user) {
+                console.log('[TabSync] Tab visible — refreshing data');
+                this.navigateTo(this.state.currentPage);
+            }
+        };
+
+        // Re-fetch on window focus (e.g., coming back from another app)
+        const handleFocus = () => {
+            if (this.state.user) {
+                console.log('[TabSync] Window focused — refreshing data');
+                this.navigateTo(this.state.currentPage);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('focus', handleFocus);
+
+        // Also auto-refresh every 30 seconds while tab is open
+        setInterval(() => {
+            if (!document.hidden && this.state.user) {
+                console.log('[AutoRefresh] 30s tick — refreshing data');
+                this.navigateTo(this.state.currentPage);
+            }
+        }, 30000);
     },
 
     setupResizer() {
@@ -107,8 +137,18 @@ const App = {
         this.state.currentPage = pageId;
         const pageContent = document.getElementById('page-content');
         const roleFolder = this.state.role === 'admin' ? 'cgdc_admin' : this.state.role;
+        
+        // Show a subtle sync indicator
+        if (pageContent.innerHTML !== '') {
+            pageContent.style.opacity = '0.6';
+            pageContent.style.transition = 'opacity 0.2s';
+        }
+
         const resetScroll = () => {
-            if (pageContent) pageContent.scrollTop = 0;
+            if (pageContent) {
+                pageContent.scrollTop = 0;
+                pageContent.style.opacity = '1';
+            }
             window.scrollTo(0, 0);
         };
 

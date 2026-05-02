@@ -22,10 +22,17 @@ router.get('/profile', requireAuth, async (req, res) => {
     if (req.user.role !== 'student') return res.status(403).json({ message: 'Access denied' });
 
     try {
-        const [rows] = await pool.query('SELECT * FROM STUDENT WHERE s_id = ?', [req.user.entityId]);
+        const [rows] = await pool.query(`
+            SELECT s.*, pc.name as coordinator_name, pc.email as coordinator_email 
+            FROM STUDENT s
+            LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            WHERE s.s_id = ?
+        `, [req.user.entityId]);
+        
         if (rows.length === 0) return res.status(404).json({ message: 'Student not found' });
         res.json(rows[0]);
     } catch (err) {
+        console.error('Profile fetch error:', err);
         res.status(500).json({ message: 'Error fetching profile' });
     }
 });
