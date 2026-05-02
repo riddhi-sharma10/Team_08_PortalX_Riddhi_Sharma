@@ -70,7 +70,7 @@ router.get('/students', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [rows] = await pool.query(`
-            SELECT s.s_id AS id, s.s_name AS name, s.email, s.dept, s.cgpa, s.profile_status AS status,
+            SELECT s.s_id AS id, s.s_name AS name, s.email, s.dept, s.cgpa, s.graduation_yr AS gradYear, s.profile_status AS status,
             (SELECT COUNT(*) FROM APPLICATION WHERE s_id = s.s_id) AS appCount,
             (SELECT COUNT(*) FROM OFFER WHERE s_id = s.s_id) AS offerCount
             FROM STUDENT s
@@ -84,6 +84,7 @@ router.get('/students', async (req, res) => {
             email: r.email,
             rollNo: `STU-${String(r.id).padStart(4, '0')}`,
             cgpa: Number(r.cgpa || 0).toFixed(2),
+            gradYear: r.gradYear || '—',
             status: r.status || 'active',
             department: r.dept,
             appCount: Number(r.appCount || 0),
@@ -203,7 +204,7 @@ router.get('/offers', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [rows] = await pool.query(`
-            SELECT o.offer_id AS id, s.s_name AS studentName, c.comp_name AS company, j.role, o.ctc, o.offer_status AS status, DATE_FORMAT(o.issued_on, '%e %b %Y') as issuedOn
+            SELECT o.offer_id AS id, s.s_name AS studentName, s.dept, c.comp_name AS company, j.role, o.ctc, o.offer_status AS status, DATE_FORMAT(o.issued_on, '%e %b %Y') as issuedOn
             FROM OFFER o
             INNER JOIN STUDENT s ON o.s_id = s.s_id
             INNER JOIN JOB_PROFILE j ON o.job_id = j.job_id
@@ -223,7 +224,7 @@ router.get('/placements', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [rows] = await pool.query(`
-            SELECT s.s_name AS studentName, s.dept, c.comp_name AS company, j.role, o.ctc, pr.record_id
+            SELECT s.s_name AS studentName, s.dept, s.cgpa, c.comp_name AS company, j.role, o.ctc, pr.record_id AS recordId
             FROM OFFER o
             INNER JOIN STUDENT s ON o.s_id = s.s_id
             INNER JOIN JOB_PROFILE j ON o.job_id = j.job_id
@@ -237,6 +238,7 @@ router.get('/placements', async (req, res) => {
             initials: (r.studentName || 'U S').split(' ').filter(p => p.length > 0).slice(0, 2).map(n => n[0]).join('').toUpperCase() || '??',
             studentName: r.studentName,
             department: r.dept,
+            cgpa: r.cgpa,
             company: r.company,
             role: r.role,
             ctc: Number(r.ctc || 0),

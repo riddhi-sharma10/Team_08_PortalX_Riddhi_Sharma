@@ -83,15 +83,38 @@ router.get('/interviews/upcoming', requireAuth, async (req, res) => {
 
     try {
         const student_id = req.user.entityId;
-        const [rows] = await pool.query(`
-            SELECT i.interview_id as id, c.comp_name as company, j.role, DATE_FORMAT(i.interview_date, '%e %b %Y') as date, TIME_FORMAT(i.interview_time, '%h:%i %p') as time, i.interview_mode as mode, i.panel_name as panel
-            FROM INTERVIEW i
-            JOIN JOB_PROFILE j ON i.job_id = j.job_id
-            JOIN COMPANY c ON j.comp_id = c.comp_id
-            WHERE i.s_id = ? AND i.interview_date >= CURDATE()
-            ORDER BY i.interview_date ASC, i.interview_time ASC
-        `, [student_id]);
         
+        // Check student status
+        const [sRow] = await pool.query('SELECT profile_status FROM STUDENT WHERE s_id = ?', [student_id]);
+        const isPlaced = sRow[0]?.profile_status === 'placed';
+
+        let query = '';
+        if (isPlaced) {
+            // If placed, show previous interviews
+            query = `
+                SELECT i.interview_id as id, c.comp_name as company, j.role, DATE_FORMAT(i.interview_date, '%e %b %Y') as date, TIME_FORMAT(i.interview_time, '%h:%i %p') as time, i.interview_mode as mode, i.panel_name as panel
+                FROM INTERVIEW i
+                JOIN JOB_PROFILE j ON i.job_id = j.job_id
+                JOIN COMPANY c ON j.comp_id = c.comp_id
+                WHERE i.s_id = ?
+                ORDER BY i.interview_date DESC, i.interview_time DESC
+                LIMIT 15
+            `;
+        } else {
+            // If active, show upcoming interviews for shortlisted/selected applications
+            query = `
+                SELECT i.interview_id as id, c.comp_name as company, j.role, DATE_FORMAT(i.interview_date, '%e %b %Y') as date, TIME_FORMAT(i.interview_time, '%h:%i %p') as time, i.interview_mode as mode, i.panel_name as panel
+                FROM INTERVIEW i
+                JOIN JOB_PROFILE j ON i.job_id = j.job_id
+                JOIN COMPANY c ON j.comp_id = c.comp_id
+                JOIN APPLICATION a ON a.s_id = i.s_id AND a.job_id = i.job_id
+                WHERE i.s_id = ? AND i.interview_date >= CURDATE()
+                AND a.status IN ('shortlisted', 'selected')
+                ORDER BY i.interview_date ASC, i.interview_time ASC
+            `;
+        }
+
+        const [rows] = await pool.query(query, [student_id]);
         res.json(rows);
     } catch (err) {
         console.error(err);

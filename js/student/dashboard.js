@@ -39,6 +39,7 @@ export async function render(container, app) {
 function renderDashboard(container, app, applications, jobs, profile, interviews) {
     const isPlaced = profile.profile_status === 'placed';
     const isOptedOut = profile.profile_status === 'opted_out';
+    const isNotEligible = profile.profile_status === 'not_eligible';
     const stats = {
         total: applications.length,
         underReview: applications.filter(a => a.status === 'under_review').length,
@@ -147,11 +148,11 @@ function renderDashboard(container, app, applications, jobs, profile, interviews
                 <!-- Secondary Column (Timeline) -->
                 <div style="display: flex; flex-direction: column; gap: 32px;">
                     
-                    <!-- Upcoming Interviews -->
-                    ${interviews && interviews.length > 0 ? `
+                    <!-- Interviews Widget -->
+                    ${!isNotEligible && interviews && interviews.length > 0 ? `
                     <div class="card" style="padding: 24px; background: white; border-top: 4px solid var(--primary);">
                         <h3 style="margin-bottom: 20px; color: var(--text-main); font-weight: 800; font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
-                            <ion-icon name="calendar" style="color: var(--primary);"></ion-icon> Upcoming Interviews
+                            <ion-icon name="${isPlaced ? 'time' : 'calendar'}" style="color: var(--primary);"></ion-icon> ${isPlaced ? 'Previous Interviews' : 'Upcoming Interviews'}
                         </h3>
                         <div style="display: flex; flex-direction: column; gap: 16px;">
                             ${interviews.map(inv => `
