@@ -495,6 +495,35 @@ router.get('/company/:id', async (req, res) => {
     }
 });
 
+// --- Admin Profile ---
+router.get('/profile', async (req, res) => {
+    try {
+        const id = req.user.entityId || 0;
+        const [admins] = await pool.query(
+            'SELECT name, email FROM CGDC_ADMIN WHERE cgdc_id = ?',
+            [id]
+        );
+        const a = admins[0] || { name: req.user.username, email: 'admin@university.edu' };
+
+        const [coordRow] = await pool.query('SELECT COUNT(*) AS cnt FROM PLACEMENT_COORDINATOR');
+        const [compRow] = await pool.query('SELECT COUNT(*) AS cnt FROM COMPANY');
+        const [studRow] = await pool.query('SELECT COUNT(*) AS cnt FROM STUDENT');
+
+        res.json({
+            name: a.name,
+            email: a.email,
+            designation: 'Placement Cell Administrator',
+            department: 'Training & Placement Office',
+            totalCoordinators: Number(coordRow[0]?.cnt || 0),
+            totalCompanies: Number(compRow[0]?.cnt || 0),
+            totalStudents: Number(studRow[0]?.cnt || 0),
+        });
+    } catch (err) {
+        console.error('Admin Profile Error:', err);
+        res.status(500).json({ message: 'Error loading admin profile' });
+    }
+});
+
 function normalizeStatus(status) { const value = String(status || '').toLowerCase(); if (['selected', 'placed', 'accepted'].includes(value)) return 'placed'; if (['under_review', 'shortlisted'].includes(value)) return 'in-progress'; if (value === 'rejected') return 'rejected'; return 'in-progress'; }
 function capitalize(text) { return String(text || '').charAt(0).toUpperCase() + String(text || '').slice(1); }
 

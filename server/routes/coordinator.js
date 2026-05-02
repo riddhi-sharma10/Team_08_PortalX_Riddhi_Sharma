@@ -189,16 +189,47 @@ router.get('/placements', async (req, res) => {
 router.get('/profile', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
-        const [coords] = await pool.query('SELECT name, email, phone_no, dept FROM PLACEMENT_COORDINATOR WHERE coord_id = ?', [id]);
+
+        // Basic coordinator info
+        const [coords] = await pool.query(
+            'SELECT name, email, phone_no, dept FROM PLACEMENT_COORDINATOR WHERE coord_id = ?',
+            [id]
+        );
         const c = coords[0] || { name: req.user.username, email: 'Not linked', dept: 'General' };
+
+        // Total students assigned to this coordinator
+        const [studentsRow] = await pool.query(
+            'SELECT COUNT(*) AS total FROM STUDENT WHERE coord_id = ?',
+            [id]
+        );
+        const studentsManaged = Number(studentsRow[0]?.total || 0);
+
+        // Students placed = distinct students with at least one accepted offer
+        const [placedRow] = await pool.query(
+            `SELECT COUNT(DISTINCT o.s_id) AS placed
+             FROM OFFER o
+             INNER JOIN STUDENT s ON o.s_id = s.s_id
+             WHERE s.coord_id = ? AND LOWER(o.offer_status) = 'accepted'`,
+            [id]
+        );
+        const studentsPlaced = Number(placedRow[0]?.placed || 0);
+
+        const placementRate = studentsManaged > 0
+            ? Math.round((studentsPlaced / studentsManaged) * 100)
+            : 0;
+
         res.json({
             name: c.name,
             email: c.email,
             phone: c.phone_no || 'Not set',
             department: c.dept,
-            designation: `Placement Coordinator`
+            designation: 'Placement Coordinator',
+            studentsManaged,
+            studentsPlaced,
+            placementRate
         });
     } catch (err) {
+        console.error('Coordinator Profile Error:', err);
         res.status(500).json({ message: 'Error loading profile' });
     }
 });

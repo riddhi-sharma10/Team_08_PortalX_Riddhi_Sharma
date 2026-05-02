@@ -53,9 +53,7 @@ function renderDashboard(container, app, applications, jobs) {
                     <h1 style="font-size: 2.2rem; color: var(--primary); font-weight: 800; letter-spacing: -0.5px;">Hey, ${firstName}! 👋</h1>
                     <p style="color: var(--text-muted); font-size: 1.1rem; margin-top: 4px;">Welcome to your personalized recruitment command center.</p>
                 </div>
-                <div style="text-align: right;">
-                    <span class="tag tag-success" style="font-size: 0.85rem; padding: 6px 16px;">DB Connection: Active</span>
-                </div>
+
             </div>
 
             <!-- Stats Grid -->

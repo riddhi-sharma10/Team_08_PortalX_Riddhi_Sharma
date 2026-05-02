@@ -1,89 +1,235 @@
 
 import { api } from '../api.js';
 
+let studentProfile = null;
+
 export async function render(container, app) {
-    container.innerHTML = `<div style="padding: 24px;"><h2>Loading official records...</h2></div>`;
+    container.innerHTML = `
+        <div class="admin-dashboard-shell" style="display:flex;align-items:center;justify-content:center;min-height:400px;">
+            <div style="text-align:center;color:var(--text-muted);">
+                <ion-icon name="sync-outline" style="font-size:2.5rem;display:block;margin:0 auto 12px; animation:spin 1s linear infinite;"></ion-icon>
+                <p>Loading Profile...</p>
+            </div>
+        </div>
+    `;
 
     try {
-        const student = await api.get('/students/profile');
-        renderProfile(container, student);
+        studentProfile = await api.get('/students/profile');
+        renderShell(container, app);
     } catch (err) {
-        container.innerHTML = `<div class="card" style="padding:24px; color:#ef4444;">Database Sync Error: ${err.message}</div>`;
+        container.innerHTML = `<div style="padding:40px;text-align:center;color:red;">Error: ${err.message}</div>`;
     }
 }
 
-function renderProfile(container, student) {
+function renderShell(container, app) {
+    const s = studentProfile;
+    const profImage = `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.s_id || 'student'}`;
+    const displayId = `STU-${String(s.s_id || 1).padStart(4, '0')}`;
+
+    // Map all known profile_status DB values to display config
+    const STATUS_MAP = {
+        placed:       { label: 'Placed',       color: '#34d399', icon: 'ribbon-outline' },
+        active:       { label: 'Active',        color: '#93c5fd', icon: 'checkmark-circle-outline' },
+        not_eligible: { label: 'Not Eligible',  color: '#f87171', icon: 'close-circle-outline' },
+        opted_out:    { label: 'Opted Out',     color: '#94a3b8', icon: 'exit-outline' },
+    };
+    const rawStatus = String(s.profile_status || 'active').toLowerCase();
+    const statusCfg = STATUS_MAP[rawStatus] || { label: rawStatus.replace(/_/g, ' '), color: '#fcd34d', icon: 'time-outline' };
+    const statusColor = statusCfg.color;
+    const statusLabel = statusCfg.label;
+    const statusIcon  = statusCfg.icon;
+
+    const cgpaColor = Number(s.cgpa) >= 8 ? '#34d399' : Number(s.cgpa) >= 6 ? '#93c5fd' : '#fcd34d';
+
     container.innerHTML = `
-        <div class="dashboard-header" style="margin-bottom: 32px;">
-            <h1 style="font-size: 2rem; color: var(--primary);">My Profile</h1>
-            <p style="color: var(--text-muted);">View and manage your official university placement record.</p>
+        <div class="profile-header-banner">
+            <div class="profile-avatar-wrapper" style="position: relative; display: inline-block;">
+                <img src="${profImage}" alt="Avatar" id="stu-avatar-img">
+                <div class="profile-verify-badge" style="background: #f0fdf4; color: #166534; border-color: #86efac;">
+                    <ion-icon name="school"></ion-icon>
+                    STUDENT
+                </div>
+            </div>
+
+            <div class="profile-info-main">
+                <div style="display:flex; align-items:center; gap:16px; margin-bottom:10px;">
+                    <h1 style="text-transform: capitalize; margin: 0; font-size: 2.4rem;">${s.s_name}</h1>
+                </div>
+
+                <div class="profile-info-meta" style="gap: 14px; font-size: 1rem; font-weight: 500; opacity: 0.95; margin-bottom: 16px;">
+                    <span>${s.dept || 'Department'}</span>
+                    <span class="dot"></span>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <ion-icon name="id-card-outline" style="font-size:1.1rem; opacity:0.8;"></ion-icon>
+                        <span>${displayId}</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 12px; font-size: 0.85rem; opacity: 0.9; background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 20px; width: fit-content; border: 1px solid rgba(255,255,255,0.15);">
+                    <ion-icon name="mail-outline" style="font-size: 1.1rem;"></ion-icon>
+                    <span>${s.email || 'No email'}</span>
+                    <span style="opacity: 0.5; margin: 0 4px;">|</span>
+                    <ion-icon name="calendar-outline" style="font-size: 1.1rem;"></ion-icon>
+                    <span style="font-weight: 600; letter-spacing: 0.5px;">Batch of ${s.graduation_yr || '—'}</span>
+                </div>
+            </div>
+
+            <div style="margin-left: auto; display: flex; gap: 24px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 20px 28px; border-radius: 20px; backdrop-filter: blur(10px);">
+                <div style="text-align: center;">
+                    <div style="font-size: 1.6rem; font-weight: 700; color: #93c5fd; line-height: 1;">${Number(s.cgpa || 0).toFixed(2)}</div>
+                    <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: 8px;">CGPA</div>
+                </div>
+                <div style="width: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.6rem; font-weight: 700; color: #34d399; line-height: 1;">${s.graduation_yr || '—'}</div>
+                    <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: 8px;">Grad Year</div>
+                </div>
+                <div style="width: 1px; background: rgba(255,255,255,0.1);"></div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.1rem; font-weight: 700; color: ${statusColor}; line-height: 1; text-transform: capitalize; letter-spacing: 0.3px;">${statusLabel}</div>
+                    <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-top: 8px;">Status</div>
+                </div>
+            </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 32px;">
-            <!-- Profile Info -->
-            <div class="card" style="padding: 32px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 24px;">
-                <div style="width: 120px; height: 120px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 3rem; font-weight: 800; border: 6px solid #f0f7ff; box-shadow: 0 10px 25px rgba(27, 58, 107, 0.15);">
-                    ${student.s_name.charAt(0)}
-                </div>
-                <div>
-                    <h2 style="font-size: 1.5rem; color: var(--text-main); font-weight: 800; margin-bottom: 4px;">${student.s_name}</h2>
-                    <p style="color: var(--text-muted); font-weight: 600;">Student ID: ${student.s_id}</p>
-                </div>
-                <div style="width: 100%; height: 1px; background: var(--border);"></div>
-                <div style="width: 100%; display: flex; flex-direction: column; gap: 16px; text-align: left;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <ion-icon name="mail-outline" style="color: var(--primary); font-size: 1.2rem;"></ion-icon>
-                        <span style="font-weight: 600; color: var(--text-main);">${student.email}</span>
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 32px;">
+            <!-- Left Column -->
+            <div style="display: flex; flex-direction: column; gap: 32px;">
+                <!-- Profile Details -->
+                <div class="card">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 32px;">
+                        <ion-icon name="person-circle" style="font-size: 1.8rem; color: var(--primary);"></ion-icon>
+                        <h3 style="font-size: 1.3rem;">Profile Details</h3>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <ion-icon name="call-outline" style="color: var(--primary); font-size: 1.2rem;"></ion-icon>
-                        <span style="font-weight: 600; color: var(--text-main);">${student.phone || 'No phone added'}</span>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px;">
+                        <!-- Full Name -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin-bottom: 0px; font-weight: 700; font-size: 0.75rem; color: var(--text-muted);">FULL NAME</label>
+                            </div>
+                            <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px;">
+                                <ion-icon name="person" style="color: #64748b; font-size: 1.1rem;"></ion-icon>
+                                <span style="font-weight: 600;">${s.s_name}</span>
+                            </div>
+                        </div>
+
+                        <!-- Phone -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin-bottom: 0px; font-weight: 700; font-size: 0.75rem; color: var(--text-muted);">PHONE NUMBER</label>
+                            </div>
+                            <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px;">
+                                <ion-icon name="call" style="color: #64748b; font-size: 1.1rem;"></ion-icon>
+                                <span style="font-weight: 600;">${s.phone || '—'}</span>
+                            </div>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin-bottom: 0px; font-weight: 700; font-size: 0.75rem; color: var(--text-muted);">INSTITUTIONAL EMAIL</label>
+                            </div>
+                            <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.8;">
+                                <ion-icon name="mail" style="color: #64748b; font-size: 1.1rem; flex-shrink: 0;"></ion-icon>
+                                <span style="font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${s.email || '—'}</span>
+                            </div>
+                        </div>
+
+                        <!-- Department -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin-bottom: 0px; font-weight: 700; font-size: 0.75rem; color: var(--text-muted);">DEPARTMENT</label>
+                            </div>
+                            <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.8;">
+                                <ion-icon name="business" style="color: #64748b; font-size: 1.1rem;"></ion-icon>
+                                <span style="font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${s.dept || '—'}</span>
+                            </div>
+                        </div>
+
+                        <!-- CGPA -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin-bottom: 0px; font-weight: 700; font-size: 0.75rem; color: var(--text-muted);">CURRENT CGPA</label>
+                            </div>
+                            <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.8;">
+                                <ion-icon name="star" style="color: ${cgpaColor}; font-size: 1.1rem;"></ion-icon>
+                                <span style="font-weight: 700; font-size: 1.1rem; color: ${cgpaColor};">${Number(s.cgpa || 0).toFixed(2)}</span>
+                            </div>
+                        </div>
+
+                        <!-- Graduation Year -->
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="margin-bottom: 0px; font-weight: 700; font-size: 0.75rem; color: var(--text-muted);">GRADUATION YEAR</label>
+                            </div>
+                            <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; opacity: 0.8;">
+                                <ion-icon name="calendar" style="color: #64748b; font-size: 1.1rem;"></ion-icon>
+                                <span style="font-weight: 600; font-size: 0.9rem;">${s.graduation_yr || '—'}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <ion-icon name="location-outline" style="color: var(--primary); font-size: 1.2rem;"></ion-icon>
-                        <span style="font-weight: 600; color: var(--text-main); uppercase;">${student.dept}</span>
+                </div>
+
+                <!-- Resume Card -->
+                <div class="card">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+                        <ion-icon name="document-text" style="font-size: 1.8rem; color: var(--primary);"></ion-icon>
+                        <h3 style="font-size: 1.3rem; margin: 0;">Official Resume</h3>
+                    </div>
+                    <div style="background: #f8fafc; padding: 24px; border-radius: 12px; border: 2px dashed var(--border); text-align: center;">
+                        <p style="color: var(--text-muted); margin-bottom: 16px; font-size: 0.9rem;">Your verified placement resume on record</p>
+                        <a href="${s.resume_url || '#'}" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; text-decoration: none; border-radius: 12px;">
+                            <ion-icon name="document-text-outline"></ion-icon>
+                            View Verified Resume
+                        </a>
                     </div>
                 </div>
             </div>
 
-            <!-- Academic & Placement Details -->
+            <!-- Right Column -->
             <div style="display: flex; flex-direction: column; gap: 32px;">
-                
+                <!-- Account Attributes -->
                 <div class="card" style="padding: 32px;">
-                    <h3 style="margin-bottom: 24px; font-weight: 800; border-bottom: 1px solid var(--border); padding-bottom: 16px;">Academic Overview</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
-                        <div>
-                            <label style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Current CGPA</label>
-                            <div style="font-size: 2rem; font-weight: 900; color: var(--primary); margin-top: 8px;">${student.cgpa}</div>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+                        <ion-icon name="shield" style="font-size: 1.8rem; color: var(--primary);"></ion-icon>
+                        <h3 style="font-size: 1.3rem; margin: 0;">Account Attributes</h3>
+                    </div>
+
+                    <div style="margin-bottom: 24px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">ROLE CLEARANCE</span>
                         </div>
-                        <div>
-                            <label style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Graduation Year</label>
-                            <div style="font-size: 2rem; font-weight: 900; color: var(--text-main); margin-top: 8px;">${student.graduation_yr}</div>
+                        <div style="background: #f8fafc; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; gap: 12px;">
+                            <ion-icon name="key" style="color: var(--primary); font-size: 1.2rem;"></ion-icon>
+                            <span style="font-weight: 700; color: var(--text-main);">Student</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 24px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">PLACEMENT STATUS</span>
+                        </div>
+                        <div style="background: #f8fafc; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; gap: 12px;">
+                            <ion-icon name="${statusIcon}" style="color: ${statusColor}; font-size: 1.2rem;"></ion-icon>
+                            <span style="font-weight: 700; color: var(--text-main); text-transform: capitalize;">${statusLabel}</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">ACADEMIC SCORE</span>
+                        </div>
+                        <div style="background: #f8fafc; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 700; color: ${cgpaColor}; font-size: 1.1rem;">${Number(s.cgpa || 0).toFixed(2)} / 10</span>
+                            </div>
+                            <div style="background: #e2e8f0; border-radius: 100px; height: 6px; overflow: hidden;">
+                                <div style="height: 100%; border-radius: 100px; background: ${cgpaColor}; width: ${Math.min(100, (Number(s.cgpa || 0) / 10) * 100)}%; transition: width 0.6s ease;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <div class="card" style="padding: 32px;">
-                    <h3 style="margin-bottom: 24px; font-weight: 800; border-bottom: 1px solid var(--border); padding-bottom: 16px;">Placement Status</h3>
-                    <div style="display: flex; align-items: center; gap: 20px;">
-                        <div style="width: 64px; height: 64px; border-radius: 16px; background: ${student.profile_status === 'placed' ? 'var(--success-bg)' : '#fef3c7'}; color: ${student.profile_status === 'placed' ? 'var(--success)' : '#d97706'}; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
-                            <ion-icon name="${student.profile_status === 'placed' ? 'ribbon' : 'time'}"></ion-icon>
-                        </div>
-                        <div>
-                            <div style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); text-transform: capitalize;">${student.profile_status.replace('_', ' ')}</div>
-                            <p style="color: var(--text-muted); margin-top: 4px; font-size: 0.9rem;">Verified by the Placement Coordinator</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card" style="padding: 32px; border: 2px dashed var(--border); background: #fafafa; text-align: center;">
-                    <h4 style="margin-bottom: 16px; color: var(--text-muted);">Official Resume Record</h4>
-                    <a href="${student.resume_url || '#'}" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; text-decoration: none;">
-                        <ion-icon name="document-text-outline"></ion-icon>
-                        View Verified Resume
-                    </a>
-                </div>
-
             </div>
         </div>
     `;

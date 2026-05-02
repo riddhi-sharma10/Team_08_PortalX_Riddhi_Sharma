@@ -24,10 +24,12 @@ function renderShell(container, app) {
     const profImage = `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.state.user.entityId || 'coordinator'}`;
     const displayId = `COORD-${String(app.state.user.entityId || 1).padStart(3, '0')}`;
     
-    let rate = 0;
-    if (coordProfile.studentsManaged > 0) {
-        rate = Math.round((coordProfile.studentsPlaced / coordProfile.studentsManaged) * 100);
-    }
+    // Use server-computed placement rate directly (avoids stale/missing field issues)
+    const rate = coordProfile.placementRate ?? (
+        coordProfile.studentsManaged > 0
+            ? Math.round((coordProfile.studentsPlaced / coordProfile.studentsManaged) * 100)
+            : 0
+    );
 
     const renderSelf = () => {
         container.innerHTML = `
@@ -150,6 +152,20 @@ function renderShell(container, app) {
                             </div>
                         </div>
                     </div>
+
+                    <!-- Professional Bio -->
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <ion-icon name="document-text" style="font-size: 1.8rem; color: var(--primary);"></ion-icon>
+                                <h3 style="font-size: 1.3rem; margin: 0;">Professional Bio</h3>
+                            </div>
+                            <ion-icon name="create-outline" style="cursor: pointer; color: var(--primary); font-size: 1.2rem;" id="edit-bio"></ion-icon>
+                        </div>
+                        <div id="bio-container" style="background: #f1f5f9; padding: 24px; border-radius: 12px; line-height: 1.6; color: #334155; font-size: 0.95rem;">
+                            ${coordProfile.bio || 'Responsible for managing student placement activities, coordinating with companies, and guiding students through the recruitment process.'}
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Right Column -->
@@ -178,9 +194,58 @@ function renderShell(container, app) {
         setupHandlers();
     };
 
+    const BIO_KEY = `coord_bio_${app.state.user.entityId || 1}`;
+    if (!coordProfile.bio) {
+        coordProfile.bio = localStorage.getItem(BIO_KEY) || 'Responsible for managing student placement activities, coordinating with companies, and guiding students through the recruitment process.';
+    }
+
     const setupHandlers = () => {
         setupInlineEdit('edit-phone', 'phone-container', 'phone', 'call');
         setupInlineEdit('edit-name', 'name-container', 'name', 'person');
+
+        // Bio edit
+        const bioIcon = document.getElementById('edit-bio');
+        const bioContainer = document.getElementById('bio-container');
+        if (bioIcon && bioContainer) {
+            bioIcon.addEventListener('click', () => {
+                if (bioIcon.style.display === 'none') return;
+                bioIcon.style.display = 'none';
+
+                const ta = document.createElement('textarea');
+                ta.value = coordProfile.bio;
+                ta.style.cssText = 'width:100%; padding:12px; border:1px solid var(--primary); border-radius:12px; font-family:inherit; font-size:0.95rem; min-height:120px; outline:none; resize:vertical; margin-bottom:12px;';
+                bioContainer.innerHTML = '';
+                bioContainer.appendChild(ta);
+
+                const btnRow = document.createElement('div');
+                btnRow.style.cssText = 'display:flex; gap:8px;';
+
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'btn-primary';
+                saveBtn.innerText = 'Save';
+                saveBtn.style.cssText = 'padding:8px 24px; font-size:0.85rem;';
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.innerText = 'Cancel';
+                cancelBtn.style.cssText = 'padding:8px 24px; font-size:0.85rem; background:#e2e8f0; color:#334155; border:none; border-radius:10px; font-weight:600; cursor:pointer;';
+
+                btnRow.appendChild(cancelBtn);
+                btnRow.appendChild(saveBtn);
+                bioContainer.appendChild(btnRow);
+
+                const resetView = () => {
+                    bioIcon.style.display = 'block';
+                    bioContainer.innerHTML = coordProfile.bio;
+                };
+
+                cancelBtn.onclick = () => resetView();
+                saveBtn.onclick = () => {
+                    coordProfile.bio = ta.value;
+                    localStorage.setItem(BIO_KEY, ta.value);
+                    resetView();
+                };
+            });
+        }
     };
 
     const setupInlineEdit = (iconId, containerId, field, iconName) => {
