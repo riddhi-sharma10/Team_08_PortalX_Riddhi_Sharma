@@ -66,7 +66,7 @@ router.get('/students', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [rows] = await pool.query(`
-            SELECT s.s_id AS id, s.s_name AS name, s.email, s.dept, s.cgpa, s.profile_status AS status,
+            SELECT s.s_id AS id, s.s_name AS name, s.email, s.dept, s.cgpa, s.graduation_yr AS gradYear, s.profile_status AS status,
             (SELECT COUNT(*) FROM APPLICATION WHERE s_id = s.s_id) AS appCount,
             (SELECT COUNT(*) FROM OFFER WHERE s_id = s.s_id) AS offerCount
             FROM STUDENT s
@@ -80,6 +80,7 @@ router.get('/students', async (req, res) => {
             email: r.email,
             rollNo: `STU-${String(r.id).padStart(4, '0')}`,
             cgpa: Number(r.cgpa || 0).toFixed(2),
+            gradYear: r.gradYear,
             status: r.status || 'active',
             department: r.dept,
             appCount: Number(r.appCount || 0),
@@ -98,6 +99,7 @@ router.get('/applications', async (req, res) => {
         const [rows] = await pool.query(`
             SELECT 
                 a.app_id AS id, 
+                s.s_id,
                 s.s_name AS studentName, 
                 s.dept, 
                 s.profile_status AS studentProfileStatus,
@@ -228,7 +230,7 @@ router.get('/profile', async (req, res) => {
 
         // Basic coordinator info
         const [coords] = await pool.query(
-            'SELECT name, email, phone_no, dept FROM PLACEMENT_COORDINATOR WHERE coord_id = ?',
+            'SELECT name, email, phone_no, dept, avatar_url FROM PLACEMENT_COORDINATOR WHERE coord_id = ?',
             [id]
         );
         const c = coords[0] || { name: req.user.username, email: 'Not linked', dept: 'General' };
@@ -259,6 +261,7 @@ router.get('/profile', async (req, res) => {
             email: c.email,
             phone: c.phone_no || 'Not set',
             department: c.dept,
+            avatar_url: c.avatar_url,
             designation: 'Placement Coordinator',
             studentsManaged,
             studentsPlaced,
@@ -267,6 +270,62 @@ router.get('/profile', async (req, res) => {
     } catch (err) {
         console.error('Coordinator Profile Error:', err);
         res.status(500).json({ message: 'Error loading profile' });
+    }
+});
+
+// Update profile
+router.put('/profile', async (req, res) => {
+    try {
+        const id = req.user.entityId;
+        const { avatar_url } = req.body;
+        
+        await pool.query(
+            'UPDATE PLACEMENT_COORDINATOR SET avatar_url = ? WHERE coord_id = ?',
+            [avatar_url, id]
+        );
+        
+        res.json({ message: 'Profile updated successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error updating profile' });
+    }
+});
+
+// --- 8. Student Details ---
+router.get('/students/:id', async (req, res) => {
+    try {
+        const studentId = req.params.id;
+        const coordId = req.user.entityId;
+
+        const [rows] = await pool.query(`
+            SELECT s.*, 
+            (SELECT COUNT(*) FROM APPLICATION WHERE s_id = s.s_id) AS totalApps,
+            (SELECT COUNT(*) FROM OFFER WHERE s_id = s.s_id AND LOWER(offer_status) = 'accepted') AS isPlaced
+            FROM STUDENT s
+            WHERE s.s_id = ? AND s.coord_id = ?
+        `, [studentId, coordId]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Student not found or not assigned to you.' });
+        }
+
+        const s = rows[0];
+        res.json({
+            id: s.s_id,
+            name: s.s_name,
+            email: s.email,
+            phone: s.phone || 'Not provided',
+            dept: s.dept,
+            cgpa: Number(s.cgpa || 0).toFixed(2),
+            gradYear: s.graduation_yr,
+            status: s.profile_status,
+            resumeUrl: s.resume_url,
+            totalApps: s.totalApps,
+            isPlaced: s.isPlaced > 0
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error fetching student details' });
     }
 });
 

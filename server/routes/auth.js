@@ -63,14 +63,23 @@ router.post('/login', async (req, res) => {
         let displayName = user.username;
         try {
             if (user.role === 'student' && user.entity_id) {
-                const [details] = await pool.query('SELECT s_name FROM STUDENT WHERE s_id = ?', [user.entity_id]);
-                if (details.length > 0) displayName = details[0].s_name;
+                const [details] = await pool.query('SELECT s_name, avatar_url FROM STUDENT WHERE s_id = ?', [user.entity_id]);
+                if (details.length > 0) {
+                    displayName = details[0].s_name;
+                    user.avatar_url = details[0].avatar_url;
+                }
             } else if (user.role === 'coordinator' && user.entity_id) {
-                const [details] = await pool.query('SELECT name FROM PLACEMENT_COORDINATOR WHERE coord_id = ?', [user.entity_id]);
-                if (details.length > 0) displayName = details[0].name;
+                const [details] = await pool.query('SELECT name, avatar_url FROM PLACEMENT_COORDINATOR WHERE coord_id = ?', [user.entity_id]);
+                if (details.length > 0) {
+                    displayName = details[0].name;
+                    user.avatar_url = details[0].avatar_url;
+                }
             } else if (user.role === 'admin' && user.entity_id) {
-                const [details] = await pool.query('SELECT name FROM CGDC_ADMIN WHERE cgdc_id = ?', [user.entity_id]);
-                if (details.length > 0) displayName = details[0].name;
+                const [details] = await pool.query('SELECT name, avatar_url FROM CGDC_ADMIN WHERE cgdc_id = ?', [user.entity_id]);
+                if (details.length > 0) {
+                    displayName = details[0].name;
+                    user.avatar_url = details[0].avatar_url;
+                }
             }
         } catch (e) {}
         const token = jwt.sign(
@@ -85,7 +94,8 @@ router.post('/login', async (req, res) => {
                 id: user.user_id,
                 name: displayName,
                 role: user.role,
-                entityId: user.entity_id
+                entityId: user.entity_id,
+                avatar_url: user.avatar_url
             }
         });
 

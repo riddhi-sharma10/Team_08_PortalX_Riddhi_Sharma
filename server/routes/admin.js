@@ -512,7 +512,7 @@ router.get('/profile', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [admins] = await pool.query(
-            'SELECT name, email FROM CGDC_ADMIN WHERE cgdc_id = ?',
+            'SELECT name, email, avatar_url FROM CGDC_ADMIN WHERE cgdc_id = ?',
             [id]
         );
         const a = admins[0] || { name: req.user.username, email: 'admin@university.edu' };
@@ -524,6 +524,7 @@ router.get('/profile', async (req, res) => {
         res.json({
             name: a.name,
             email: a.email,
+            avatar_url: a.avatar_url,
             designation: 'Placement Cell Administrator',
             department: 'Training & Placement Office',
             totalCoordinators: Number(coordRow[0]?.cnt || 0),
@@ -577,32 +578,21 @@ router.get('/company/:id', async (req, res) => {
     }
 });
 
-// --- Admin Profile ---
-router.get('/profile', async (req, res) => {
+// Update profile
+router.put('/profile', async (req, res) => {
     try {
-        const id = req.user.entityId || 0;
-        const [admins] = await pool.query(
-            'SELECT name, email FROM CGDC_ADMIN WHERE cgdc_id = ?',
-            [id]
+        const id = req.user.entityId;
+        const { avatar_url } = req.body;
+        
+        await pool.query(
+            'UPDATE CGDC_ADMIN SET avatar_url = ? WHERE cgdc_id = ?',
+            [avatar_url, id]
         );
-        const a = admins[0] || { name: req.user.username, email: 'admin@university.edu' };
-
-        const [coordRow] = await pool.query('SELECT COUNT(*) AS cnt FROM PLACEMENT_COORDINATOR');
-        const [compRow] = await pool.query('SELECT COUNT(*) AS cnt FROM COMPANY');
-        const [studRow] = await pool.query('SELECT COUNT(*) AS cnt FROM STUDENT');
-
-        res.json({
-            name: a.name,
-            email: a.email,
-            designation: 'Placement Cell Administrator',
-            department: 'Training & Placement Office',
-            totalCoordinators: Number(coordRow[0]?.cnt || 0),
-            totalCompanies: Number(compRow[0]?.cnt || 0),
-            totalStudents: Number(studRow[0]?.cnt || 0),
-        });
+        
+        res.json({ message: 'Profile updated successfully' });
     } catch (err) {
-        console.error('Admin Profile Error:', err);
-        res.status(500).json({ message: 'Error loading admin profile' });
+        console.error(err);
+        res.status(500).json({ message: 'Error updating profile' });
     }
 });
 

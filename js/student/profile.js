@@ -23,7 +23,7 @@ export async function render(container, app) {
 
 function renderShell(container, app) {
     const s = studentProfile;
-    const profImage = `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.s_id || 'student'}`;
+    const profImage = s.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.s_id || 'student'}`;
     const displayId = `STU-${String(s.s_id || 1).padStart(4, '0')}`;
 
     // Map all known profile_status DB values to display config
@@ -44,7 +44,11 @@ function renderShell(container, app) {
     container.innerHTML = `
         <div class="profile-header-banner">
             <div class="profile-avatar-wrapper" style="position: relative; display: inline-block;">
-                <img src="${profImage}" alt="Avatar" id="stu-avatar-img">
+                <img src="${profImage}" alt="Avatar" id="stu-avatar-img" style="object-fit: cover;">
+                <input type="file" id="stu-avatar-input" accept="image/*" style="display: none;">
+                <button id="change-photo-btn" style="position: absolute; bottom: 5px; right: 5px; background: var(--primary); color: white; border: 2px solid white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: transform 0.2s;">
+                    <ion-icon name="camera" style="font-size: 1.2rem;"></ion-icon>
+                </button>
                 <div class="profile-verify-badge" style="background: #f0fdf4; color: #166534; border-color: #86efac;">
                     <ion-icon name="school"></ion-icon>
                     STUDENT
@@ -281,12 +285,13 @@ function renderShell(container, app) {
             const newUrl = prompt('Enter the link to your updated resume (e.g., Google Drive or LinkedIn link):', studentProfile.resume_url || '');
             if (newUrl && newUrl !== studentProfile.resume_url) {
                 try {
-                    updateBtn.innerHTML = '<ion-icon name="sync-outline" class="spin"></ion-icon> Updating...';
                     updateBtn.disabled = true;
+                    updateBtn.innerHTML = '<ion-icon name="sync-outline" class="spin"></ion-icon> Updating...';
                     
                     await api.put('/students/profile', { 
                         resume_url: newUrl,
-                        phone: studentProfile.phone // Keep existing phone
+                        phone: studentProfile.phone,
+                        avatar_url: studentProfile.avatar_url
                     });
                     
                     alert('Resume updated successfully!');
@@ -299,6 +304,65 @@ function renderShell(container, app) {
                     updateBtn.disabled = false;
                 }
             }
+        });
+    }
+
+    const changePhotoBtn = document.getElementById('change-photo-btn');
+    const avatarInput = document.getElementById('stu-avatar-input');
+
+    if (changePhotoBtn && avatarInput) {
+        changePhotoBtn.addEventListener('click', () => avatarInput.click());
+
+        avatarInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Basic validation
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file.');
+                return;
+            }
+            if (file.size > 2 * 1024 * 1024) { // 2MB limit
+                alert('Image size should be less than 2MB.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const base64String = event.target.result;
+                
+                try {
+                    changePhotoBtn.disabled = true;
+                    changePhotoBtn.innerHTML = '<ion-icon name="sync-outline" class="spin"></ion-icon>';
+
+                    await api.put('/students/profile', {
+                        resume_url: studentProfile.resume_url,
+                        phone: studentProfile.phone,
+                        avatar_url: base64String
+                    });
+
+                    // Update UI and local storage
+                    studentProfile.avatar_url = base64String;
+                    const img = document.getElementById('stu-avatar-img');
+                    if (img) img.src = base64String;
+
+                    const savedUser = JSON.parse(localStorage.getItem('placement_user') || '{}');
+                    savedUser.avatar_url = base64String;
+                    localStorage.setItem('placement_user', JSON.stringify(savedUser));
+                    app.state.user = savedUser;
+
+                    // Sync Navbar
+                    app.Navbar.render(app.state.user);
+                    
+                    alert('Profile photo uploaded and updated successfully!');
+                } catch (err) {
+                    alert('Failed to upload photo: ' + err.message);
+                } finally {
+                    changePhotoBtn.disabled = false;
+                    changePhotoBtn.innerHTML = '<ion-icon name="camera" style="font-size: 1.2rem;"></ion-icon>';
+                }
+            };
+            reader.readAsDataURL(file);
         });
     }
 }

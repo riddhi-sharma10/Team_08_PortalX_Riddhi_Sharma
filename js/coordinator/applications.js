@@ -116,7 +116,7 @@ function appRows() {
                 }
             </td>
             <td style="padding: 16px; text-align: center;">
-                <button class="btn-primary" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700;">Details</button>
+                <button class="btn-primary details-btn" data-sid="${a.s_id || a.student_id || ''}" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700;">Details</button>
             </td>
         </tr>
     `).join('');
@@ -141,6 +141,7 @@ function wireEvents(container) {
         const tb = document.getElementById('app-tbody');
         if (tb) tb.innerHTML = appRows();
         attachStatusEvents(container);
+        attachDetailsEvents(container);
     });
 
     filterBtn?.addEventListener('click', (e) => {
@@ -155,6 +156,7 @@ function wireEvents(container) {
         const tb = document.getElementById('app-tbody');
         if (tb) tb.innerHTML = appRows();
         attachStatusEvents(container);
+        attachDetailsEvents(container);
     });
 
     document.addEventListener('click', e => {
@@ -163,6 +165,125 @@ function wireEvents(container) {
     });
 
     attachStatusEvents(container);
+    attachDetailsEvents(container);
+}
+
+function attachDetailsEvents(container) {
+    console.log('[Applications] Attaching details events to', container.querySelectorAll('.details-btn').length, 'buttons');
+    container.querySelectorAll('.details-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const sid = btn.getAttribute('data-sid');
+            console.log('[Applications] Details clicked for Student ID:', sid);
+            showStudentModal(sid);
+        });
+    });
+}
+
+async function showStudentModal(sid) {
+    let modal = document.getElementById('student-detail-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'student-detail-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+        document.body.appendChild(modal);
+    }
+    
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div style="background:white;width:600px;border-radius:16px;padding:32px;position:relative;box-shadow:0 20px 50px rgba(0,0,0,0.2);">
+            <div style="text-align:center;padding:20px;">
+                <ion-icon name="sync-outline" style="font-size:2rem;animation:spin 1s linear infinite;"></ion-icon>
+                <p>Fetching Student Profile...</p>
+            </div>
+        </div>
+    `;
+
+    try {
+        const s = await api.get(`/coordinator/students/${sid}`);
+        const avatar = (s.name || 'U S').split(' ').filter(p => p.length > 0).slice(0, 2).map(n => n[0]).join('').toUpperCase();
+        
+        modal.innerHTML = `
+            <style>
+                @keyframes slideUpModal {
+                    from { transform: translateY(30px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+            </style>
+            <div style="background:white;width:650px;border-radius:20px;overflow:hidden;position:relative;box-shadow:0 25px 70px rgba(0,0,0,0.3);animation: slideUpModal 0.3s ease-out;">
+                <button id="close-modal" style="position:absolute;right:20px;top:20px;background:white;border:none;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:10;">
+                    <ion-icon name="close-outline" style="font-size:1.5rem;"></ion-icon>
+                </button>
+
+                <div style="background:var(--primary);padding:40px;text-align:center;color:white;">
+                    <div style="width:100px;height:100px;background:rgba(255,255,255,0.2);border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;font-weight:800;border:4px solid rgba(255,255,255,0.3);">
+                        ${avatar}
+                    </div>
+                    <h2 style="margin:0;font-size:1.8rem;letter-spacing:-0.5px;">${s.name}</h2>
+                    <p style="margin:8px 0 0;opacity:0.8;font-weight:500;">STU-${String(s.id).padStart(4,'0')} | ${s.dept}</p>
+                </div>
+
+                <div style="padding:32px;display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+                    <div>
+                        <label style="font-size:0.7rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px;">Contact Info</label>
+                        <div style="display:flex;flex-direction:column;gap:12px;">
+                            <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;">
+                                <ion-icon name="mail-outline" style="color:var(--primary);"></ion-icon>
+                                <span>${s.email}</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;">
+                                <ion-icon name="call-outline" style="color:var(--primary);"></ion-icon>
+                                <span>${s.phone}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="font-size:0.7rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px;">Academic Stats</label>
+                        <div style="display:flex;flex-direction:column;gap:12px;">
+                            <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;">
+                                <ion-icon name="star-outline" style="color:var(--warning);"></ion-icon>
+                                <span>CGPA: <b>${s.cgpa}</b></span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;">
+                                <ion-icon name="calendar-outline" style="color:var(--primary);"></ion-icon>
+                                <span>Graduating ${s.gradYear}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="grid-column:1/-1;border-top:1px solid #f1f5f9;padding-top:24px;">
+                        <label style="font-size:0.7rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:12px;">Placement Information</label>
+                        <div style="display:flex;gap:16px;">
+                            <div style="flex:1;background:#f8fafc;padding:16px;border-radius:12px;">
+                                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Profile Status</span>
+                                <span class="tag ${s.status==='placed'?'tag-success':s.status==='opted_out'?'tag-muted':'tag-info'}" style="font-weight:800;text-transform:uppercase;">${s.status.replace('_',' ')}</span>
+                            </div>
+                            <div style="flex:1;background:#f8fafc;padding:16px;border-radius:12px;">
+                                <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Applications</span>
+                                <span style="font-weight:800;font-size:1.1rem;color:var(--primary);">${s.totalApps} submitted</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="grid-column:1/-1;margin-top:8px;">
+                        <a href="${s.resumeUrl || '#'}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:var(--primary);color:white;text-decoration:none;border-radius:12px;font-weight:700;transition:opacity 0.2s;">
+                            <ion-icon name="document-text-outline" style="font-size:1.2rem;"></ion-icon>
+                            View Student Resume
+                        </a>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modal.querySelector('#close-modal').onclick = () => modal.style.display = 'none';
+        modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+
+    } catch (err) {
+        modal.innerHTML = `<div style="background:white;padding:32px;border-radius:16px;text-align:center;">
+            <p style="color:red;">Error: ${err.message}</p>
+            <button onclick="document.getElementById('student-detail-modal').style.display='none'" class="btn-primary" style="margin-top:16px;">Close</button>
+        </div>`;
+    }
 }
 
 function attachStatusEvents(container) {

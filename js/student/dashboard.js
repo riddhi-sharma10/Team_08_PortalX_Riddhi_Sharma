@@ -37,6 +37,7 @@ export async function render(container, app) {
 
 function renderDashboard(container, app, applications, jobs, profile) {
     const isPlaced = profile.profile_status === 'placed';
+    const isOptedOut = profile.profile_status === 'opted_out';
     const stats = {
         total: applications.length,
         underReview: applications.filter(a => a.status === 'under_review').length,
@@ -60,7 +61,13 @@ function renderDashboard(container, app, applications, jobs, profile) {
                         <ion-icon name="trophy" style="font-size:1.4rem;"></ion-icon>
                         <span style="font-weight:900;">OFFICIALLY PLACED</span>
                        </div>`
-                    : `<div class="tag tag-info" style="padding: 12px 24px; font-size: 1rem; border-radius: 12px; font-weight:800; border: 1px solid #e2e8f0;">RECRUITMENT ACTIVE</div>`
+                    : (isOptedOut
+                        ? `<div class="tag tag-muted" style="padding: 12px 24px; font-size: 1rem; border-radius: 12px; display:flex; align-items:center; gap:8px; border: 1px solid #94a3b8; background: #f1f5f9; color: #64748b;">
+                            <ion-icon name="exit-outline" style="font-size:1.4rem;"></ion-icon>
+                            <span style="font-weight:900;">OPTED OUT</span>
+                           </div>`
+                        : `<div class="tag tag-info" style="padding: 12px 24px; font-size: 1rem; border-radius: 12px; font-weight:800; border: 1px solid #e2e8f0;">RECRUITMENT ACTIVE</div>`
+                    )
                 }
             </div>
 

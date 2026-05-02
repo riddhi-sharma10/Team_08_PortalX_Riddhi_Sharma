@@ -25,7 +25,7 @@ export const Navbar = {
                         <span class="name" style="text-transform: capitalize; font-weight: 700; color: var(--primary);">${cleanName}</span>
                         <span class="role" style="font-weight: 600; font-size: 0.7rem; opacity: 0.6;">${user.role.toUpperCase()}</span>
                     </div>
-                    <img src="${user.avatar}" alt="Avatar" class="avatar" style="border: 2px solid var(--border);">
+                    <img src="${user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`}" alt="Avatar" class="avatar" style="border: 2px solid var(--border); width: 40px; height: 40px; border-radius: 8px; object-fit: cover;">
                 </div>
             </div>
         `;

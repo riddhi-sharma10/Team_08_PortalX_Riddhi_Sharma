@@ -34,12 +34,12 @@ router.get('/profile', requireAuth, async (req, res) => {
 router.put('/profile', requireAuth, async (req, res) => {
     if (req.user.role !== 'student') return res.status(403).json({ message: 'Access denied' });
 
-    const { resume_url, phone } = req.body;
+    const { resume_url, phone, avatar_url } = req.body;
 
     try {
         await pool.query(
-            'UPDATE STUDENT SET resume_url = ?, phone = ? WHERE s_id = ?',
-            [resume_url, phone, req.user.entityId]
+            'UPDATE STUDENT SET resume_url = ?, phone = ?, avatar_url = ? WHERE s_id = ?',
+            [resume_url, phone, avatar_url, req.user.entityId]
         );
         res.json({ message: 'Profile updated successfully' });
     } catch (err) {

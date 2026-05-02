@@ -37,7 +37,6 @@ export async function render(container, app) {
             phone: overrides.phone || '+91 98765 43210',
             officeLocation: overrides.officeLocation || 'Admin Block, 2nd Floor',
             bio: overrides.bio || 'Responsible for managing placement operations, employer relations, and institutional recruitment workflows.',
-            // DB fields take precedence for name/email/designation/department
             name: overrides.name || dbProfile.name,
         };
 
@@ -50,14 +49,18 @@ export async function render(container, app) {
 function renderShell(container, app) {
     const p = adminProfile;
     const username = app?.state?.user?.username || 'admin';
-    const profImage = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+    const profImage = p.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
     const displayId = `ADM-${String(app?.state?.user?.entityId || 1).padStart(3, '0')}`;
 
     const renderSelf = () => {
         container.innerHTML = `
             <div class="profile-header-banner">
                 <div class="profile-avatar-wrapper" style="position: relative; display: inline-block;">
-                    <img src="${profImage}" alt="Avatar" id="admin-avatar-img">
+                    <img src="${profImage}" alt="Avatar" id="admin-avatar-img" style="object-fit: cover;">
+                    <input type="file" id="admin-avatar-input" accept="image/*" style="display: none;">
+                    <button id="change-photo-btn" style="position: absolute; bottom: 5px; right: 5px; background: var(--primary); color: white; border: 2px solid white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: transform 0.2s;">
+                        <ion-icon name="camera" style="font-size: 1.2rem;"></ion-icon>
+                    </button>
                     <div class="profile-verify-badge" style="background: #e0f2fe; color: #0369a1; border-color: #38bdf8;">
                         <ion-icon name="shield-checkmark"></ion-icon>
                         ADMIN VERIFIED
@@ -265,6 +268,46 @@ function setupHandlers(username, app, renderSelf) {
     setupInlineEdit('edit-phone', 'phone-container', 'phone', 'call', username, app, renderSelf);
     setupInlineEdit('edit-office', 'office-container', 'officeLocation', 'location', username, app, renderSelf);
     setupBioEdit('edit-bio', 'bio-container', username);
+
+    // Photo upload
+    const changePhotoBtn = document.getElementById('change-photo-btn');
+    const avatarInput = document.getElementById('admin-avatar-input');
+    if (changePhotoBtn && avatarInput) {
+        changePhotoBtn.addEventListener('click', () => avatarInput.click());
+        avatarInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return; }
+            if (file.size > 2 * 1024 * 1024) { alert('Image size should be less than 2MB.'); return; }
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const base64String = event.target.result;
+                try {
+                    changePhotoBtn.disabled = true;
+                    changePhotoBtn.innerHTML = '<ion-icon name="sync-outline" class="spin"></ion-icon>';
+                    await api.put('/admin/profile', { avatar_url: base64String });
+
+                    adminProfile.avatar_url = base64String;
+                    document.getElementById('admin-avatar-img').src = base64String;
+
+                    const savedUser = JSON.parse(localStorage.getItem('placement_user') || '{}');
+                    savedUser.avatar_url = base64String;
+                    localStorage.setItem('placement_user', JSON.stringify(savedUser));
+                    app.state.user = savedUser;
+                    if(app.Navbar) app.Navbar.render(app.state.user, app);
+                    
+                    alert('Profile photo updated successfully!');
+                } catch (err) {
+                    alert('Failed to upload photo: ' + err.message);
+                } finally {
+                    changePhotoBtn.disabled = false;
+                    changePhotoBtn.innerHTML = '<ion-icon name="camera" style="font-size: 1.2rem;"></ion-icon>';
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    }
 }
 
 function setupInlineEdit(iconId, containerId, field, iconName, username, app, renderSelf) {

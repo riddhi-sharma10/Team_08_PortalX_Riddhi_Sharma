@@ -42,10 +42,22 @@ function renderApplications(container, data, profile, mainApp) {
                     <tbody>
                         ${data.length > 0 ? data.map(app => {
                             const isSelected = app.status === 'selected';
-                            const hasAcceptedThis = isSelected && isPlaced; // Simplification: if placed and selected, assume this is it?
-                            // Better: check if this specific application is the accepted one.
-                            // For now, if student is placed, they can't accept more.
+                            const hasAcceptedThis = app.offer_status === 'accepted';
+                            const someOfferAccepted = data.some(a => a.offer_status === 'accepted') || isPlaced;
                             
+                            let actionButton = '';
+                            if (hasAcceptedThis) {
+                                actionButton = `<button class="btn-primary" style="padding: 8px 20px; font-size: 0.75rem; border-radius: 8px; background: var(--success); cursor: default; border: none; min-width: 100px;">Accepted</button>`;
+                            } else if (isSelected) {
+                                if (someOfferAccepted) {
+                                    actionButton = `<button class="btn-primary" style="padding: 8px 20px; font-size: 0.75rem; border-radius: 8px; background: #e2e8f0; color: #94a3b8; cursor: not-allowed; border: 1px solid #cbd5e1; min-width: 100px;" disabled>Accept</button>`;
+                                } else {
+                                    actionButton = `<button class="accept-btn btn-primary" data-job="${app.job_id}" data-comp="${app.comp_name}" style="padding: 8px 20px; font-size: 0.75rem; border-radius: 8px; background: #2563eb; min-width: 100px;">Accept</button>`;
+                                }
+                            } else {
+                                actionButton = `<button class="btn-primary" style="padding: 8px 20px; font-size: 0.75rem; border-radius: 8px; background: #e2e8f0; color: #94a3b8; cursor: not-allowed; border: 1px solid #cbd5e1; min-width: 100px;" disabled>Accept</button>`;
+                            }
+
                             return `
                                 <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;" class="hover-row">
                                     <td style="padding: 16px;">
@@ -71,13 +83,7 @@ function renderApplications(container, data, profile, mainApp) {
                                         <div style="font-weight: 800; color: ${app.ats_score > 80 ? 'var(--success)' : '#64748b'};">${app.ats_score || '--'}</div>
                                     </td>
                                     <td style="padding: 16px; text-align: center;">
-                                        ${isSelected 
-                                            ? (isPlaced 
-                                                ? `<button class="btn-primary" style="padding: 8px 20px; font-size: 0.75rem; border-radius: 8px; background: var(--success); cursor: default; border: none;">Accepted</button>`
-                                                : `<button class="accept-btn btn-primary" data-job="${app.job_id}" data-comp="${app.comp_name}" style="padding: 8px 20px; font-size: 0.75rem; border-radius: 8px; background: #2563eb;">Accept</button>`
-                                            )
-                                            : `<button class="btn-primary" style="padding: 8px 20px; font-size: 0.75rem; border-radius: 8px; background: #e2e8f0; color: #94a3b8; cursor: not-allowed; border: 1px solid #cbd5e1;" disabled>Accept</button>`
-                                        }
+                                        ${actionButton}
                                     </td>
                                 </tr>
                             `;

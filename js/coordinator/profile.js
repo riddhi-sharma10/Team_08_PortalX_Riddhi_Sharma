@@ -21,7 +21,7 @@ export async function render(container, app) {
 }
 
 function renderShell(container, app) {
-    const profImage = `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.state.user.entityId || 'coordinator'}`;
+    const profImage = coordProfile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.state.user.entityId || 'coordinator'}`;
     const displayId = `COORD-${String(app.state.user.entityId || 1).padStart(3, '0')}`;
     
     // Use server-computed placement rate directly (avoids stale/missing field issues)
@@ -35,7 +35,11 @@ function renderShell(container, app) {
         container.innerHTML = `
             <div class="profile-header-banner">
                 <div class="profile-avatar-wrapper" style="position: relative; display: inline-block;">
-                    <img src="${profImage}" alt="Avatar" id="coord-avatar-img">
+                    <img src="${profImage}" alt="Avatar" id="coord-avatar-img" style="object-fit: cover;">
+                    <input type="file" id="coord-avatar-input" accept="image/*" style="display: none;">
+                    <button id="change-photo-btn" style="position: absolute; bottom: 5px; right: 5px; background: var(--primary); color: white; border: 2px solid white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: transform 0.2s;">
+                        <ion-icon name="camera" style="font-size: 1.2rem;"></ion-icon>
+                    </button>
                     <div class="profile-verify-badge" style="background: #e0f2fe; color: #0369a1; border-color: #38bdf8;">
                         <ion-icon name="shield-checkmark"></ion-icon>
                         COORD VERIFIED
@@ -194,11 +198,6 @@ function renderShell(container, app) {
         setupHandlers();
     };
 
-    const BIO_KEY = `coord_bio_${app.state.user.entityId || 1}`;
-    if (!coordProfile.bio) {
-        coordProfile.bio = localStorage.getItem(BIO_KEY) || 'Responsible for managing student placement activities, coordinating with companies, and guiding students through the recruitment process.';
-    }
-
     const setupHandlers = () => {
         setupInlineEdit('edit-phone', 'phone-container', 'phone', 'call');
         setupInlineEdit('edit-name', 'name-container', 'name', 'person');
@@ -241,9 +240,49 @@ function renderShell(container, app) {
                 cancelBtn.onclick = () => resetView();
                 saveBtn.onclick = () => {
                     coordProfile.bio = ta.value;
-                    localStorage.setItem(BIO_KEY, ta.value);
+                    localStorage.setItem(`coord_bio_${app.state.user.entityId || 1}`, ta.value);
                     resetView();
                 };
+            });
+        }
+
+        // Photo upload
+        const changePhotoBtn = document.getElementById('change-photo-btn');
+        const avatarInput = document.getElementById('coord-avatar-input');
+        if (changePhotoBtn && avatarInput) {
+            changePhotoBtn.addEventListener('click', () => avatarInput.click());
+            avatarInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return; }
+                if (file.size > 2 * 1024 * 1024) { alert('Image size should be less than 2MB.'); return; }
+
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const base64String = event.target.result;
+                    try {
+                        changePhotoBtn.disabled = true;
+                        changePhotoBtn.innerHTML = '<ion-icon name="sync-outline" class="spin"></ion-icon>';
+                        await api.put('/coordinator/profile', { avatar_url: base64String });
+
+                        coordProfile.avatar_url = base64String;
+                        document.getElementById('coord-avatar-img').src = base64String;
+
+                        const savedUser = JSON.parse(localStorage.getItem('placement_user') || '{}');
+                        savedUser.avatar_url = base64String;
+                        localStorage.setItem('placement_user', JSON.stringify(savedUser));
+                        app.state.user = savedUser;
+                        if(app.Navbar) app.Navbar.render(app.state.user, app);
+                        
+                        alert('Profile photo updated successfully!');
+                    } catch (err) {
+                        alert('Failed to upload photo: ' + err.message);
+                    } finally {
+                        changePhotoBtn.disabled = false;
+                        changePhotoBtn.innerHTML = '<ion-icon name="camera" style="font-size: 1.2rem;"></ion-icon>';
+                    }
+                };
+                reader.readAsDataURL(file);
             });
         }
     };
@@ -306,20 +345,13 @@ function renderShell(container, app) {
                 const val = document.getElementById(`input-${field}`).value;
                 coordProfile[field] = val;
                 
-                // Keep UI updated seamlessly
-                const payload = {};
-                payload[field] = val;
-                
                 try {
                     saveBtn.innerText = '...';
-                    await api.put('/coordinator/profile', payload);
+                    await api.put('/coordinator/profile', { [field]: val });
                     
-                    // If name was changed, sync header UI
                     if(field === 'name') {
                         app.state.user.name = val;
-                        // re-render the whole page to update the giant header name
                         renderSelf();
-                        // also update navbar
                         if(app.Navbar) app.Navbar.render(app.state.user, app);
                     } else {
                         resetView();

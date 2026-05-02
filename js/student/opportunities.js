@@ -4,6 +4,7 @@ import { api } from '../api.js';
 let allJobs = [];
 let filteredJobs = [];
 let searchQuery = '';
+let isRestricted = false;
 let mainApp = null;
 
 export async function render(container, app) {
@@ -23,7 +24,7 @@ export async function render(container, app) {
             api.get('/students/profile')
         ]);
         allJobs = jobs;
-        const isPlaced = profile.profile_status === 'placed';
+        isRestricted = profile.profile_status === 'placed' || profile.profile_status === 'opted_out';
         
         const pendingSearch = sessionStorage.getItem('pendingSearch');
         if (pendingSearch) {
@@ -33,7 +34,7 @@ export async function render(container, app) {
 
         renderShell(container);
         updateFilteredJobs();
-        renderJobList(isPlaced);
+        renderJobList();
     } catch (err) {
         container.innerHTML = `<div class="card" style="padding:24px; color:#ef4444;">Database Sync Error: ${err.message}</div>`;
     }
@@ -73,7 +74,7 @@ function updateFilteredJobs() {
         : [...allJobs];
 }
 
-function renderJobList(isPlaced = false) {
+function renderJobList() {
     const grid = document.getElementById('jobs-grid');
     if (!grid) return;
 
@@ -103,10 +104,10 @@ function renderJobList(isPlaced = false) {
                     <button data-id="${job.job_id}" class="details-btn btn-primary" style="background: white; color: var(--primary); border: 1px solid var(--border); padding: 8px 14px; font-size: 0.8rem; border-radius: 8px; flex: 1;">Details</button>
                     ${isClosed 
                         ? `<button class="btn-primary" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 8px 14px; font-size: 0.8rem; border-radius: 8px; flex: 1; cursor: not-allowed;" disabled>Closed</button>`
-                        : (isPlaced
-                            ? `<button class="btn-primary" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 8px 14px; font-size: 0.8rem; border-radius: 8px; flex: 1; cursor: not-allowed;" disabled>Locked</button>`
-                            : (hasApplied 
-                                ? `<button class="btn-primary" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 8px 14px; font-size: 0.8rem; border-radius: 8px; flex: 1; cursor: not-allowed;" disabled>Applied</button>`
+                        : (hasApplied 
+                            ? `<button class="btn-primary" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 8px 14px; font-size: 0.8rem; border-radius: 8px; flex: 1; cursor: not-allowed;" disabled>Applied</button>`
+                            : (isRestricted
+                                ? `<button class="btn-primary" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 8px 14px; font-size: 0.8rem; border-radius: 8px; flex: 1; cursor: not-allowed;" disabled>Apply Now</button>`
                                 : `<button data-id="${job.job_id}" data-role="${job.role}" class="apply-btn btn-primary" style="padding: 8px 14px; font-size: 0.8rem; border-radius: 8px; flex: 1;">Apply Now</button>`
                             )
                         )

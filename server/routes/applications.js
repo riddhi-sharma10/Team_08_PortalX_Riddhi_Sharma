@@ -16,17 +16,19 @@ router.get('/', requireAuth, async (req, res) => {
             // OR join with the base table to filter by s_id.
             // Joining with base table APPLICATION is safer for filtering by ID.
             query = `
-                SELECT v.*, a.job_id 
+                SELECT v.*, a.job_id, o.offer_status
                 FROM vw_application_full_details v
                 JOIN APPLICATION a ON v.app_id = a.app_id
+                LEFT JOIN OFFER o ON a.s_id = o.s_id AND a.job_id = o.job_id
                 WHERE a.s_id = ?
             `;
             params.push(req.user.entityId);
         } else {
             query = `
-                SELECT v.*, a.job_id 
+                SELECT v.*, a.job_id, o.offer_status
                 FROM vw_application_full_details v
                 JOIN APPLICATION a ON v.app_id = a.app_id
+                LEFT JOIN OFFER o ON a.s_id = o.s_id AND a.job_id = o.job_id
             `;
         }
 
@@ -91,19 +93,29 @@ router.post('/accept', requireAuth, async (req, res) => {
             throw new Error('You have already accepted an offer.');
         }
 
-        // 2. Update OFFER table
-        const [offerUpdate] = await conn.query(
-            "UPDATE OFFER SET offer_status = 'accepted' WHERE s_id = ? AND job_id = ?",
+        // 2. Insert or Update OFFER table
+        const [existingOffer] = await conn.query(
+            "SELECT * FROM OFFER WHERE s_id = ? AND job_id = ?",
             [student_id, job_id]
         );
 
-        if (offerUpdate.affectedRows === 0) {
-            // If no record in OFFER table, maybe create one? 
-            // Usually, there should be an offer record if status is 'selected'.
-            // But let's be safe and just update APPLICATION status too.
+        if (existingOffer.length > 0) {
+            await conn.query(
+                "UPDATE OFFER SET offer_status = 'accepted' WHERE s_id = ? AND job_id = ?",
+                [student_id, job_id]
+            );
+        } else {
+            // Get CTC from JOB_PROFILE
+            const [job] = await conn.query("SELECT package FROM JOB_PROFILE WHERE job_id = ?", [job_id]);
+            const ctc = job.length > 0 ? job[0].package : 0;
+            
+            await conn.query(
+                "INSERT INTO OFFER (s_id, job_id, offer_status, ctc, issued_on) VALUES (?, ?, 'accepted', ?, CURDATE())",
+                [student_id, job_id, ctc]
+            );
         }
 
-        // 3. Update APPLICATION status to selected (just in case it wasn't)
+        // 3. Update APPLICATION status to selected
         await conn.query(
             "UPDATE APPLICATION SET status = 'selected' WHERE s_id = ? AND job_id = ?",
             [student_id, job_id]

@@ -10,7 +10,8 @@ const app = express();
 
 // MIDDLEWARE
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // Request X-Ray Logger (Prints all incoming API calls to server terminal)
 app.use((req, res, next) => {
