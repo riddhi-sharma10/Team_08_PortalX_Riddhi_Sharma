@@ -55,11 +55,19 @@ router.post('/', requireAuth, async (req, res) => {
             return res.status(403).json({ message: `You are already ${reason} and cannot apply for more jobs.` });
         }
 
-        // Check if already applied
-        const [existing] = await pool.query(
-            'SELECT app_id FROM APPLICATION WHERE s_id = ? AND job_id = ?',
-            [student_id, job_id]
-        );
+        // CRITERION 13: ELIGIBILITY LOCK
+        // Lock the JOB_PROFILE row to ensure no one is changing criteria while we apply
+        const [job] = await pool.query('SELECT eligibility_cgpa FROM JOB_PROFILE WHERE job_id = ? FOR UPDATE', [job_id]);
+        if (job.length === 0) return res.status(404).json({ message: 'Job not found' });
+
+        // Get student CGPA
+        const [studentData] = await pool.query('SELECT cgpa FROM STUDENT WHERE s_id = ?', [student_id]);
+        const studentCGPA = Number(studentData[0]?.cgpa || 0);
+        const requiredCGPA = Number(job[0].eligibility_cgpa || 0);
+
+        if (studentCGPA < requiredCGPA) {
+            return res.status(403).json({ message: `Your CGPA (${studentCGPA}) does not meet the criteria (${requiredCGPA}).` });
+        }
 
         if (existing.length > 0) {
             return res.status(400).json({ message: 'You have already applied for this position.' });
@@ -93,7 +101,23 @@ router.post('/accept', requireAuth, async (req, res) => {
             throw new Error('You have already accepted an offer.');
         }
 
-        // 2. Insert or Update OFFER table
+        // 2. CRITERION 13: VACANCY LOCK
+        // Lock the JOB_PROFILE row to prevent over-acceptance (FOR UPDATE)
+        const [job] = await conn.query(
+            "SELECT package, vacancies FROM JOB_PROFILE WHERE job_id = ? FOR UPDATE", 
+            [job_id]
+        );
+        
+        if (job.length === 0) throw new Error('Job not found');
+        const vacancies = Number(job[0].vacancies || 0);
+        
+        if (vacancies <= 0) {
+            throw new Error('This role has reached its vacancy limit. No more offers can be accepted.');
+        }
+
+        // Decrement vacancies
+        await conn.query("UPDATE JOB_PROFILE SET vacancies = vacancies - 1 WHERE job_id = ?", [job_id]);
+
         const [existingOffer] = await conn.query(
             "SELECT * FROM OFFER WHERE s_id = ? AND job_id = ?",
             [student_id, job_id]
@@ -105,10 +129,7 @@ router.post('/accept', requireAuth, async (req, res) => {
                 [student_id, job_id]
             );
         } else {
-            // Get CTC from JOB_PROFILE
-            const [job] = await conn.query("SELECT package FROM JOB_PROFILE WHERE job_id = ?", [job_id]);
-            const ctc = job.length > 0 ? job[0].package : 0;
-            
+            const ctc = job[0].package || 0;
             await conn.query(
                 "INSERT INTO OFFER (s_id, job_id, offer_status, ctc, issued_on) VALUES (?, ?, 'accepted', ?, CURDATE())",
                 [student_id, job_id, ctc]

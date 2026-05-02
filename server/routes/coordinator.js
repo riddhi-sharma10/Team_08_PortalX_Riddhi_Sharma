@@ -130,27 +130,43 @@ router.get('/applications', async (req, res) => {
     }
 });
 
-// Update Application Status
 router.patch('/applications/:id/status', async (req, res) => {
     try {
         const { status } = req.body;
         const { id } = req.params;
         const coordId = req.user.entityId;
 
-        // Verify the student belongs to this coordinator
-        const [app] = await pool.query(`
-            SELECT a.app_id 
-            FROM APPLICATION a
-            JOIN STUDENT s ON a.s_id = s.s_id
-            WHERE a.app_id = ? AND s.coord_id = ?
-        `, [id, coordId]);
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
 
-        if (app.length === 0) {
-            return res.status(403).json({ message: 'Unauthorized to update this application' });
+            // Verify the student belongs to this coordinator
+            const [app] = await conn.query(`
+                SELECT a.app_id, a.s_id 
+                FROM APPLICATION a
+                JOIN STUDENT s ON a.s_id = s.s_id
+                WHERE a.app_id = ? AND s.coord_id = ?
+            `, [id, coordId]);
+
+            if (app.length === 0) {
+                await conn.rollback();
+                return res.status(403).json({ message: 'Unauthorized to update this application' });
+            }
+
+            // CRITERION 13: STATUS CONFLICT LOCK
+            // Lock the student row to prevent "Opt Out" race conditions
+            await conn.query('SELECT s_id FROM STUDENT WHERE s_id = ? FOR UPDATE', [app[0].s_id]);
+
+            await conn.query('UPDATE APPLICATION SET status = ? WHERE app_id = ?', [status, id]);
+            
+            await conn.commit();
+            res.json({ message: 'Status updated successfully' });
+        } catch (e) {
+            await conn.rollback();
+            throw e;
+        } finally {
+            conn.release();
         }
-
-        await pool.query('UPDATE APPLICATION SET status = ? WHERE app_id = ?', [status, id]);
-        res.json({ message: 'Status updated successfully' });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Error updating status' });
@@ -179,23 +195,47 @@ router.get('/interviews', async (req, res) => {
 
 // Schedule new interview
 router.post('/interviews', async (req, res) => {
+    const conn = await pool.getConnection();
     try {
-        const { s_id, job_id, interview_date, interview_time, mode, panel } = req.body;
+        const { s_id, job_id, interview_date, interview_time, mode, panel, room_no } = req.body;
         const coordId = req.user.entityId;
 
-        // Verify student belongs to coord
-        const [student] = await pool.query('SELECT s_id FROM STUDENT WHERE s_id = ? AND coord_id = ?', [s_id, coordId]);
-        if (student.length === 0) return res.status(403).json({ message: 'Unauthorized: Student not assigned to you' });
+        await conn.beginTransaction();
 
-        await pool.query(`
-            INSERT INTO INTERVIEW (s_id, job_id, panel_name, interview_date, interview_time, interview_mode, interview_result)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending')
-        `, [s_id, job_id, panel || 'General Panel', interview_date, interview_time || null, mode || 'online']);
+        // 1. Verify student belongs to coord
+        const [student] = await conn.query('SELECT s_id FROM STUDENT WHERE s_id = ? AND coord_id = ?', [s_id, coordId]);
+        if (student.length === 0) {
+            await conn.rollback();
+            return res.status(403).json({ message: 'Unauthorized: Student not assigned to you' });
+        }
 
+        // 2. CRITERION 13: SLOT LOCK (Double-booking prevention)
+        // Lock the specific slot/room for this date/time to prevent two coordinators from stealing it
+        const room = room_no || 'Room-A';
+        const [conflicts] = await conn.query(`
+            SELECT interview_id FROM INTERVIEW 
+            WHERE interview_date = ? AND interview_time = ? AND room_no = ? 
+            FOR UPDATE
+        `, [interview_date, interview_time, room]);
+
+        if (conflicts.length > 0) {
+            await conn.rollback();
+            return res.status(409).json({ message: `Slot Conflict: ${room} is already booked for this time.` });
+        }
+
+        await conn.query(`
+            INSERT INTO INTERVIEW (s_id, job_id, panel_name, interview_date, interview_time, interview_mode, room_no, interview_result)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+        `, [s_id, job_id, panel || 'General Panel', interview_date, interview_time || null, mode || 'online', room]);
+
+        await conn.commit();
         res.json({ message: 'Interview scheduled successfully' });
     } catch (err) {
+        await conn.rollback();
         console.error('Error scheduling interview:', err);
         res.status(500).json({ message: 'Failed to schedule interview' });
+    } finally {
+        conn.release();
     }
 });
 

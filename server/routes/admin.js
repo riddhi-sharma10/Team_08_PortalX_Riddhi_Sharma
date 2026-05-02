@@ -934,16 +934,60 @@ router.post('/assignments/assign', async (req, res) => {
     }
 });
 
-function normalizeStatus(status) {
-    const value = String(status || '').toLowerCase();
-    if (['selected', 'placed', 'accepted'].includes(value)) return 'placed';
-    if (['under_review', 'shortlisted', 'in-progress', 'in_progress', 'applied', 'active'].includes(value)) return 'active';
-    if (value === 'rejected') return 'rejected';
-    if (value === 'opted_out' || value === 'opted out') return 'opted_out';
-    if (value === 'not_eligible' || value === 'not eligible') return 'not_eligible';
+// POST /admin/coordinator-swap - Bulk re-assign students to a new coordinator
+router.post('/coordinator-swap', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        const { studentIds, newCoordId } = req.body; // array of IDs
+        if (!studentIds || !studentIds.length || !newCoordId) {
+            return res.status(400).json({ message: 'Missing students or coordinator ID' });
+        }
+
+        await conn.beginTransaction();
+
+        // CRITERION 13: BULK LOCK (Shared/Exclusive Lock)
+        // Lock all selected students to prevent anyone from editing them during the swap
+        // Using FOR UPDATE to ensure exclusive access
+        const [lockedStudents] = await conn.query(
+            'SELECT s_id FROM STUDENT WHERE s_id IN (?) FOR UPDATE',
+            [studentIds]
+        );
+
+        if (lockedStudents.length !== studentIds.length) {
+            await conn.rollback();
+            return res.status(404).json({ message: 'Some students were not found' });
+        }
+
+        // Perform the swap
+        await conn.query(
+            'UPDATE STUDENT SET coord_id = ? WHERE s_id IN (?)',
+            [newCoordId, studentIds]
+        );
+
+        await conn.commit();
+        res.json({ message: `Successfully re-assigned ${studentIds.length} students.` });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        console.error('Bulk Swap Error:', err);
+        res.status(500).json({ message: 'Failed to perform bulk swap: ' + err.message });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
+function normalizeStatus(s) {
+    if (!s) return 'active';
+    const low = s.toLowerCase();
+    if (low.includes('place')) return 'placed';
+    if (low.includes('opt')) return 'opted_out';
+    if (low.includes('not')) return 'not_eligible';
     return 'active';
 }
-function capitalize(text) { return String(text || '').charAt(0).toUpperCase() + String(text || '').slice(1); }
+
+function capitalize(s) {
+    if (!s) return '';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // Catch-all 404 for admin routes to prevent HTML responses
 router.use((req, res) => {
