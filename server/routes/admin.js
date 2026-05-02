@@ -19,7 +19,7 @@ router.get('/dashboard', async (req, res) => {
         const [companies] = await pool.query('SELECT COUNT(*) AS count FROM COMPANY');
         const [applications] = await pool.query('SELECT COUNT(*) AS count FROM APPLICATION');
         const [verified] = await pool.query("SELECT COUNT(*) AS count FROM STUDENT WHERE profile_status NOT IN ('opted_out', 'not_eligible')");
-        const [interviews] = await pool.query("SELECT COUNT(*) AS count FROM APPLICATION WHERE status IN ('under_review', 'shortlisted')");
+        const [interviews] = await pool.query("SELECT COUNT(*) AS count FROM APPLICATION WHERE status IN ('under_review', 'shortlisted', 'applied')");
         const [offers] = await pool.query("SELECT COUNT(DISTINCT s_id) AS count FROM PLACEMENT_RECORD");
         const [totalJobOffers] = await pool.query("SELECT COUNT(*) AS count FROM PLACEMENT_RECORD");
 
@@ -159,55 +159,86 @@ router.get('/users', async (req, res) => {
         const roleMap = { Student: 'student', Coordinator: 'coordinator', Admin: 'cgdc_admin' };
         const dbRole = roleMap[role] || 'student';
 
-        const [rows] = await pool.query(`
-            SELECT
-                u.user_id AS id,
-                COALESCE(s.s_name, c.name, a.name, u.username) AS name,
-                u.username,
-                COALESCE(s.email, c.email, a.email, CONCAT(u.username, '@university.edu')) AS email,
-                CASE WHEN u.role = 'student' THEN COALESCE(s.dept, '') 
-                     WHEN u.role = 'coordinator' THEN COALESCE(c.dept, '') 
-                     ELSE '' END AS branch,
-                CASE WHEN u.role = 'student' THEN CONCAT('ST-', LPAD(COALESCE(s.s_id, u.entity_id, 0), 4, '0')) 
-                     WHEN u.role = 'coordinator' THEN CONCAT('CD-', LPAD(COALESCE(c.coord_id, u.entity_id, 0), 3, '0'))
-                     ELSE COALESCE(CAST(u.entity_id AS CHAR), '') END AS entityId,
-                CASE 
-                     WHEN u.role = 'student' THEN 
-                         CASE 
-                            WHEN s.profile_status = 'opted_out' THEN 'opted_out'
-                            WHEN s.profile_status = 'not_eligible' THEN 'not_eligible'
-                            WHEN best_pr.record_id IS NOT NULL THEN 'placed'
-                            WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'in_progress'
-                            WHEN latest_app.status = 'rejected' THEN 'rejected'
-                            ELSE 'active'
-                         END
-                     ELSE 'active' 
-                END AS status,
-                CASE WHEN u.role = 'student' THEN 'Standard' ELSE 'Elevated' END AS permission,
-                u.role,
-                0 AS lastLoginDays
-            FROM USER_ROLE u
-            LEFT JOIN STUDENT s ON u.role = 'student' AND s.s_id = u.entity_id
-            LEFT JOIN PLACEMENT_COORDINATOR c ON u.role = 'coordinator' AND c.coord_id = u.entity_id
-            LEFT JOIN CGDC_ADMIN a ON u.role IN ('admin','cgdc_admin') AND a.cgdc_id = u.entity_id
-            LEFT JOIN (
-                SELECT pr1.* 
-                FROM PLACEMENT_RECORD pr1
-                JOIN (
-                    SELECT s_id, MAX(record_id) as max_id 
-                    FROM PLACEMENT_RECORD GROUP BY s_id
-                ) pr2 ON pr1.s_id = pr2.s_id AND pr1.record_id = pr2.max_id
-            ) best_pr ON s.s_id = best_pr.s_id
-            LEFT JOIN (
-                SELECT a1.* 
-                FROM APPLICATION a1
-                JOIN (
-                    SELECT s_id, MAX(app_id) as max_id 
-                    FROM APPLICATION GROUP BY s_id
-                ) a2 ON a1.s_id = a2.s_id AND a1.app_id = a2.max_id
-            ) latest_app ON s.s_id = latest_app.s_id AND best_pr.record_id IS NULL
-            WHERE u.role = ?
-        `, [dbRole]);
+        let sql = '';
+        if (dbRole === 'student') {
+            sql = `
+                SELECT
+                    COALESCE(u.user_id, s.s_id) AS id,
+                    COALESCE(s.s_name, u.username) AS name,
+                    u.username,
+                    COALESCE(s.email, CONCAT(u.username, '@university.edu')) AS email,
+                    COALESCE(s.dept, '') AS branch,
+                    CONCAT('ST-', LPAD(s.s_id, 4, '0')) AS entityId,
+                    s.s_id AS entityIdRaw,
+                    CASE 
+                         WHEN s.profile_status = 'opted_out' THEN 'opted_out'
+                         WHEN s.profile_status = 'not_eligible' THEN 'not_eligible'
+                         WHEN s.profile_status = 'placed' OR best_pr.record_id IS NOT NULL THEN 'placed'
+                         WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'active'
+                         WHEN latest_app.status = 'rejected' THEN 'rejected'
+                         WHEN s.profile_status = 'active' THEN 'active'
+                         ELSE 'active'
+                    END AS status,
+                    'Standard' AS permission,
+                    'student' AS role,
+                    0 AS lastLoginDays
+                FROM STUDENT s
+                LEFT JOIN USER_ROLE u ON u.entity_id = s.s_id AND u.role = 'student'
+                LEFT JOIN (
+                    SELECT pr1.* 
+                    FROM PLACEMENT_RECORD pr1
+                    JOIN (
+                        SELECT s_id, MAX(record_id) as max_id 
+                        FROM PLACEMENT_RECORD GROUP BY s_id
+                    ) pr2 ON pr1.s_id = pr2.s_id AND pr1.record_id = pr2.max_id
+                ) best_pr ON s.s_id = best_pr.s_id
+                LEFT JOIN (
+                    SELECT a1.* 
+                    FROM APPLICATION a1
+                    JOIN (
+                        SELECT s_id, MAX(app_id) as max_id 
+                        FROM APPLICATION GROUP BY s_id
+                    ) a2 ON a1.s_id = a2.s_id AND a1.app_id = a2.max_id
+                ) latest_app ON s.s_id = latest_app.s_id AND best_pr.record_id IS NULL
+            `;
+        } else if (dbRole === 'coordinator') {
+            sql = `
+                SELECT
+                    COALESCE(u.user_id, c.coord_id) AS id,
+                    COALESCE(c.name, u.username) AS name,
+                    u.username,
+                    COALESCE(c.email, CONCAT(u.username, '@university.edu')) AS email,
+                    COALESCE(c.dept, '') AS branch,
+                    CONCAT('CD-', LPAD(c.coord_id, 3, '0')) AS entityId,
+                    c.coord_id AS entityIdRaw,
+                    'active' AS status,
+                    'Elevated' AS permission,
+                    'coordinator' AS role,
+                    0 AS lastLoginDays
+                FROM PLACEMENT_COORDINATOR c
+                LEFT JOIN USER_ROLE u ON u.entity_id = c.coord_id AND u.role = 'coordinator'
+            `;
+        } else {
+            sql = `
+                SELECT
+                    u.user_id AS id,
+                    COALESCE(a.name, u.username) AS name,
+                    u.username,
+                    COALESCE(a.email, CONCAT(u.username, '@university.edu')) AS email,
+                    '' AS branch,
+                    CAST(u.entity_id AS CHAR) AS entityId,
+                    u.entity_id AS entityIdRaw,
+                    'active' AS status,
+                    'Elevated' AS permission,
+                    u.role,
+                    0 AS lastLoginDays
+                FROM USER_ROLE u
+                LEFT JOIN CGDC_ADMIN a ON u.role IN ('admin','cgdc_admin') AND a.cgdc_id = u.entity_id
+                WHERE u.role IN ('admin', 'cgdc_admin')
+            `;
+        }
+
+        const [rows] = await pool.query(sql);
 
         const filtered = rows.filter((row) => {
             const haystack = [row.name, row.username, row.email, row.entityId, row.role, row.branch].join(' ').toLowerCase();
@@ -576,14 +607,16 @@ router.get('/profile', async (req, res) => {
 });
 
 router.post('/student', async (req, res) => {
+    const conn = await pool.getConnection();
     try {
-        const { name, email, phone, dob, dept, graduation_yr, cgpa, profile_status } = req.body;
+        await conn.beginTransaction();
+        const { name, email, phone, dob, dept, graduation_yr, cgpa, profile_status, company, packageLpa } = req.body;
 
         if (!name || !email || !dept || !graduation_yr) {
             return res.status(400).json({ message: 'Missing required fields' });
         }
 
-        const [result] = await pool.query(`
+        const [result] = await conn.query(`
             INSERT INTO STUDENT (s_name, email, phone, date_of_birth, dept, graduation_yr, cgpa, profile_status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [
@@ -599,28 +632,212 @@ router.post('/student', async (req, res) => {
 
         const newStudentId = result.insertId;
 
-        // Automatically create a user account for the student
+        // Create a user account for the student
         const username = email.split('@')[0];
-        // Hash password should be done here in real app, we use a simple default for mock
-        await pool.query(`
-            INSERT INTO USER_ROLE (username, password, role, entity_id)
-            VALUES (?, ?, 'student', ?)
-        `, [username, 'student123', newStudentId]);
+        await conn.query(
+            'INSERT INTO USER_ROLE (username, password_hash, role, entity_id, entity_type) VALUES (?, ?, ?, ?, ?)',
+            [username, 'student123', 'student', newStudentId, 'student']
+        );
 
+        // Handle Placement if status is 'placed'
+        if (profile_status === 'placed' && company) {
+            // Find or create company
+            const [companies] = await conn.query('SELECT comp_id FROM COMPANY WHERE comp_name = ?', [company]);
+            let compId;
+            if (companies.length > 0) {
+                compId = companies[0].comp_id;
+            } else {
+                const [newComp] = await conn.query('INSERT INTO COMPANY (comp_name, tier) VALUES (?, ?)', [company, 'Tier-3']);
+                compId = newComp.insertId;
+            }
+
+            // Create Placement Record
+            await conn.query(`
+                INSERT INTO PLACEMENT_RECORD (s_id, comp_id, academic_year, salary_offered, stream, status)
+                VALUES (?, ?, ?, ?, ?, 'confirmed')
+            `, [newStudentId, compId, Number(graduation_yr), parseFloat(packageLpa) || 0, dept]);
+        }
+
+        await conn.commit();
         res.status(201).json({ message: 'Student created successfully', studentId: newStudentId });
     } catch (err) {
-        console.error('Error creating student:', err);
+        await conn.rollback();
+        console.error('Error adding student:', err);
+        
+        if (err.code === 'ER_DUP_ENTRY') {
+            if (err.sqlMessage.includes('username') || err.sqlMessage.includes('USER_ROLE')) {
+                return res.status(409).json({ message: 'A user account with this email/username already exists.' });
+            }
+            if (err.sqlMessage.includes('email') || err.sqlMessage.includes('STUDENT')) {
+                return res.status(409).json({ message: 'A student with this email is already registered.' });
+            }
+            return res.status(409).json({ message: 'A record with these details already exists.' });
+        }
+        
+        res.status(500).json({ message: 'Failed to add student: ' + err.message });
+    } finally {
+        conn.release();
+    }
+});
+
+// DELETE /admin/student/:id
+router.delete('/student/:id', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const { id } = req.params;
+        
+        // Delete all linked data first to avoid FK constraints
+        await conn.query('DELETE FROM APPLICATION WHERE s_id = ?', [id]);
+        await conn.query('DELETE FROM PLACEMENT_RECORD WHERE s_id = ?', [id]);
+        await conn.query('DELETE FROM RESUME WHERE s_id = ?', [id]);
+        await conn.query('DELETE FROM USER_ROLE WHERE entity_id = ? AND role = ?', [id, 'student']);
+        await conn.query('DELETE FROM STUDENT WHERE s_id = ?', [id]);
+        
+        await conn.commit();
+        res.json({ message: 'Student deleted successfully' });
+    } catch (err) {
+        await conn.rollback();
+        console.error('Error deleting student:', err);
+        res.status(500).json({ message: 'Failed to delete student' });
+    } finally {
+        conn.release();
+    }
+});
+
+// POST /admin/coordinator
+router.post('/coordinator', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const { name, email, phone_no, dept, cgdc_id } = req.body;
+        
+        if (!name || !email || !dept) {
+            return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        const [result] = await conn.query(
+            'INSERT INTO PLACEMENT_COORDINATOR (name, email, phone_no, dept, cgdc_id) VALUES (?, ?, ?, ?, ?)',
+            [name, email, phone_no || null, dept, cgdc_id || null]
+        );
+        const newId = result.insertId;
+
+        const username = email.split('@')[0];
+        await conn.query(
+            'INSERT INTO USER_ROLE (username, password_hash, role, entity_id, entity_type) VALUES (?, ?, ?, ?, ?)',
+            [username, 'coord123', 'coordinator', newId, 'coordinator']
+        );
+
+        await conn.commit();
+        res.status(201).json({ message: 'Coordinator added successfully', id: newId });
+    } catch (err) {
+        await conn.rollback();
+        console.error('Error adding coordinator:', err);
         if (err.code === 'ER_DUP_ENTRY') {
             return res.status(409).json({ message: 'Email already exists' });
         }
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: 'Failed to add coordinator' });
+    } finally {
+        conn.release();
+    }
+});
+
+// DELETE /admin/coordinator/:id
+router.delete('/coordinator/:id', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const { id } = req.params;
+        await conn.query('DELETE FROM USER_ROLE WHERE entity_id = ? AND role = ?', [id, 'coordinator']);
+        await conn.query('DELETE FROM PLACEMENT_COORDINATOR WHERE coord_id = ?', [id]);
+        await conn.commit();
+        res.json({ message: 'Coordinator deleted successfully' });
+    } catch (err) {
+        await conn.rollback();
+        console.error('Error deleting coordinator:', err);
+        res.status(500).json({ message: 'Failed to delete coordinator' });
+    } finally {
+        conn.release();
+    }
+});
+
+// POST /admin/company
+router.post('/company', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const { 
+            name, industry, tier, location, website, jobRole, avgPackage, 
+            contactEmail, contactPhone, positions 
+        } = req.body;
+
+        if (!name || !industry || !tier) {
+            return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        const [result] = await conn.query(
+            'INSERT INTO COMPANY (comp_name, industry_type, location, contact_email, contact_phone, job_role, avg_package_offered, tier, website) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                name, 
+                industry, 
+                location || null, 
+                contactEmail || null, 
+                contactPhone || null, 
+                jobRole || null, 
+                parseFloat(avgPackage) || 0, 
+                tier, 
+                website || null
+            ]
+        );
+
+        const compId = result.insertId;
+
+        // Save positions to JOB_PROFILE
+        if (positions && Array.isArray(positions)) {
+            for (const pos of positions) {
+                await conn.query(
+                    'INSERT INTO JOB_PROFILE (comp_id, role, job_type, package, eligibility_cgpa, eligible_branch, required_skills, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    [
+                        compId, 
+                        pos.title, 
+                        pos.type || 'Full Time', 
+                        parseFloat(pos.salary) || 0, 
+                        parseFloat(pos.cgpa) || 0, 
+                        pos.branch || null, 
+                        pos.skills || null, 
+                        'open'
+                    ]
+                );
+            }
+        }
+
+        await conn.commit();
+        res.status(201).json({ message: 'Company and positions added successfully', compId });
+    } catch (err) {
+        await conn.rollback();
+        console.error('Error adding company:', err);
+        res.status(500).json({ message: 'Failed to add company: ' + err.message });
+    } finally {
+        conn.release();
+    }
+});
+
+// DELETE /admin/company/:id
+router.delete('/company/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('DELETE FROM COMPANY WHERE comp_id = ?', [id]);
+        res.json({ message: 'Company deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting company:', err);
+        res.status(500).json({ message: 'Failed to delete company' });
     }
 });
 
 function normalizeStatus(status) {
     const value = String(status || '').toLowerCase();
     if (['selected', 'placed', 'accepted'].includes(value)) return 'placed';
-    if (['under_review', 'shortlisted', 'in-progress', 'applied', 'active'].includes(value)) return 'active';
+    if (['under_review', 'shortlisted', 'in-progress', 'in_progress', 'applied', 'active'].includes(value)) return 'active';
     if (value === 'rejected') return 'rejected';
     if (value === 'opted_out') return 'opted_out';
     if (value === 'not_eligible') return 'not_eligible';

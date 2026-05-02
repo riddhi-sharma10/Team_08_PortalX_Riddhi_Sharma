@@ -1,21 +1,16 @@
-import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
-dotenv.config();
-
-const token = jwt.sign(
-    { id: 1, role: 'cgdc_admin', entityId: 1 },
-    process.env.JWT_SECRET || 'secret', 
-    { expiresIn: '24h' }
-);
-console.log("Token:", token);
-
-fetch("http://localhost:3001/api/admin/dashboard", {
-    headers: {
-        'Authorization': 'Bearer ' + token
+const fetch = async () => {
+    try {
+        const response = await (await import('node-fetch')).default('http://localhost:3001/api/admin/users?role=Student', {
+            headers: {
+                // I don't have a token, so it might fail if requireAuth is on
+                'Authorization': 'Bearer ...' 
+            }
+        });
+        const data = await response.json();
+        console.log('Count:', data.length);
+    } catch (e) {
+        console.log('Fetch failed (likely auth):', e.message);
     }
-}).then(async res => {
-    console.log("Status:", res.status);
-    console.log("Content-Type:", res.headers.get("content-type"));
-    const text = await res.text();
-    console.log("Response starts with:", text.substring(0, 100));
-}).catch(console.error);
+};
+// fetch();
+console.log('I cannot easily test the API without a valid JWT token.');

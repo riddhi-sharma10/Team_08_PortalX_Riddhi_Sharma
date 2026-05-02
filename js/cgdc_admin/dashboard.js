@@ -162,7 +162,7 @@ function renderShell(container) {
                 <div class="admin-card-head admin-card-head-inline">
                     <div>
                         <h3>Student Placement Records</h3>
-                        <span id="dash-records-subtitle">All 300 students synced from MySQL</span>
+                        <span id="dash-records-subtitle">All ${fmt(data.stats[0]?.value || 0)} students synced from MySQL</span>
                     </div>
                     <div class="admin-table-actions">
                         <div class="admin-filter-wrap">
