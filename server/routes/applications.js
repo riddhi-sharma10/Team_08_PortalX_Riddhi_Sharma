@@ -32,4 +32,35 @@ router.get('/', requireAuth, async (req, res) => {
     }
 });
 
+// POST /api/applications - Submit a new application
+router.post('/', requireAuth, async (req, res) => {
+    try {
+        const { job_id } = req.body;
+        const student_id = req.user.entityId;
+
+        if (!job_id) return res.status(400).json({ message: 'Job ID is required' });
+
+        // Check if already applied
+        const [existing] = await pool.query(
+            'SELECT app_id FROM APPLICATION WHERE s_id = ? AND job_id = ?',
+            [student_id, job_id]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({ message: 'You have already applied for this position.' });
+        }
+
+        // Insert new application
+        await pool.query(
+            "INSERT INTO APPLICATION (s_id, job_id, applied_date, status) VALUES (?, ?, CURDATE(), 'under_review')",
+            [student_id, job_id]
+        );
+
+        res.json({ message: 'application submitted' });
+    } catch (err) {
+        console.error('SUBMIT_ERROR:', err);
+        res.status(500).json({ message: 'Error submitting application: ' + err.message });
+    }
+});
+
 export default router;

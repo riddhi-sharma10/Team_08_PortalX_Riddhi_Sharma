@@ -13,11 +13,12 @@ router.get('/', requireAuth, async (req, res) => {
                 j.*,
                 c.comp_name,
                 c.tier,
-                c.industry_type
+                c.industry_type,
+                (SELECT COUNT(*) FROM APPLICATION WHERE s_id = ? AND job_id = j.job_id) as has_applied
             FROM JOB_PROFILE j
             JOIN COMPANY c ON j.comp_id = c.comp_id
             ORDER BY j.job_id DESC
-        `);
+        `, [req.user.entityId]);
         res.json(rows);
     } catch (err) {
         console.error('Error fetching jobs:', err);
@@ -76,11 +77,12 @@ router.get('/info/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const [jobs] = await pool.query(`
-            SELECT j.*, c.comp_name, c.industry_type, c.tier 
+            SELECT j.*, c.comp_name, c.industry_type, c.tier,
+            (SELECT COUNT(*) FROM APPLICATION WHERE s_id = ? AND job_id = j.job_id) as has_applied
             FROM JOB_PROFILE j
             JOIN COMPANY c ON j.comp_id = c.comp_id
             WHERE j.job_id = ?
-        `, [id]);
+        `, [req.user.entityId, id]);
 
         if (jobs.length === 0) return res.status(404).json({ message: 'Job not found' });
         const job = jobs[0];

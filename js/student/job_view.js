@@ -26,10 +26,9 @@ export async function render(container, app) {
     `;
 
     try {
-        // Fetch detailed job info from the new specific endpoint
         const job = await api.get(`/jobs/info/${jobId}`);
-
         const deadline = job.app_deadline ? new Date(job.app_deadline).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+        const hasApplied = job.has_applied > 0;
 
         container.innerHTML = `
             <div class="dashboard-shell" style="padding: 32px;">
@@ -46,7 +45,6 @@ export async function render(container, app) {
                 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 32px;">
                     <!-- Left: Details -->
                     <div style="display: flex; flex-direction: column; gap: 24px;">
-                        <!-- Job Description Box -->
                         <div class="card" style="padding: 32px;">
                             <h3 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 24px; display: flex; align-items: center; gap: 10px;">
                                 <ion-icon name="document-text-outline" style="color: var(--primary);"></ion-icon> Job Description
@@ -55,7 +53,6 @@ export async function render(container, app) {
                                 ${job.job_description || 'No detailed description available in the database for this role.'}
                             </div>
 
-                            <!-- PDF Section -->
                             <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; align-items: center; justify-content: space-between;">
                                 <div style="display: flex; align-items: center; gap: 16px;">
                                     <div style="width: 48px; height: 48px; background: #fee2e2; color: #dc2626; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
@@ -70,7 +67,6 @@ export async function render(container, app) {
                             </div>
                         </div>
 
-                        <!-- Eligibility & Skills Box -->
                         <div class="card" style="padding: 32px;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
                                 <div>
@@ -103,46 +99,34 @@ export async function render(container, app) {
                         </div>
                     </div>
 
-                    <!-- Right: Info Panel -->
+                    <!-- Right Panel -->
                     <div style="display: flex; flex-direction: column; gap: 24px;">
                         <div class="card" style="padding: 24px;">
-                            <h4 style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px;">Role Information</h4>
-                            
+                            <h4 style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 20px;">Role Information</h4>
                             <div style="display: grid; gap: 20px;">
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 40px; height: 40px; background: #ecfdf5; color: #059669; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                        <ion-icon name="cash-outline"></ion-icon>
-                                    </div>
+                                    <div style="width: 40px; height: 40px; background: #ecfdf5; color: #059669; border-radius: 10px; display: flex; align-items: center; justify-content: center;"><ion-icon name="cash-outline"></ion-icon></div>
                                     <div>
                                         <p style="margin: 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">SALARY PACKAGE</p>
                                         <p style="margin: 0; font-weight: 800; color: var(--text-main);">₹${job.package} LPA</p>
                                     </div>
                                 </div>
-
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 40px; height: 40px; background: #fff7ed; color: #ea580c; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                        <ion-icon name="star-outline"></ion-icon>
-                                    </div>
+                                    <div style="width: 40px; height: 40px; background: #fff7ed; color: #ea580c; border-radius: 10px; display: flex; align-items: center; justify-content: center;"><ion-icon name="star-outline"></ion-icon></div>
                                     <div>
                                         <p style="margin: 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">CGPA CUTOFF</p>
                                         <p style="margin: 0; font-weight: 800; color: var(--text-main);">${job.eligibility_cgpa} or higher</p>
                                     </div>
                                 </div>
-
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 40px; height: 40px; background: #fef2f2; color: #dc2626; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                        <ion-icon name="calendar-outline"></ion-icon>
-                                    </div>
+                                    <div style="width: 40px; height: 40px; background: #fef2f2; color: #dc2626; border-radius: 10px; display: flex; align-items: center; justify-content: center;"><ion-icon name="calendar-outline"></ion-icon></div>
                                     <div>
                                         <p style="margin: 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">APPLICATION DEADLINE</p>
                                         <p style="margin: 0; font-weight: 800; color: var(--text-main);">${deadline}</p>
                                     </div>
                                 </div>
-
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 40px; height: 40px; background: #eff6ff; color: #2563eb; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                        <ion-icon name="briefcase-outline"></ion-icon>
-                                    </div>
+                                    <div style="width: 40px; height: 40px; background: #eff6ff; color: #2563eb; border-radius: 10px; display: flex; align-items: center; justify-content: center;"><ion-icon name="briefcase-outline"></ion-icon></div>
                                     <div>
                                         <p style="margin: 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">JOB TYPE</p>
                                         <p style="margin: 0; font-weight: 800; color: var(--text-main);">${job.job_type || 'Full-time'}</p>
@@ -150,39 +134,53 @@ export async function render(container, app) {
                                 </div>
                             </div>
 
-                            <button id="applyNowBtn" class="btn-primary" style="width: 100%; margin-top: 32px; padding: 16px; border-radius: 12px; font-weight: 800; font-size: 1rem; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);">
-                                Apply for this Position
-                            </button>
+                            ${hasApplied 
+                                ? `<button class="btn-primary" style="width: 100%; margin-top: 32px; padding: 16px; border-radius: 12px; font-weight: 800; font-size: 1rem; background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; cursor: not-allowed;" disabled>Applied Successfully</button>`
+                                : `<button id="applyNowBtn" class="btn-primary" style="width: 100%; margin-top: 32px; padding: 16px; border-radius: 12px; font-weight: 800; font-size: 1rem; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);">Apply for this Position</button>`
+                            }
                         </div>
 
-                        <div class="card" style="padding: 24px; background: #f8fafc; border: 1px solid var(--border);">
-                            <h4 style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Company Info</h4>
+                        <div class="card" style="padding: 24px; background: #f8fafc;">
+                            <h4 style="font-size: 0.8rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px;">Company Info</h4>
                             <p style="margin: 0; font-weight: 700; color: var(--text-main); font-size: 1.1rem;">${job.comp_name}</p>
                             <span class="tag tag-info" style="margin-top: 8px;">${job.industry_type || 'Technology'}</span>
-                            <button id="viewCompBtn" style="width: 100%; margin-top: 16px; background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 8px; border-radius: 8px; font-weight: 700; cursor: pointer;">
-                                View Company Profile
-                            </button>
+                            <button id="viewCompBtn" style="width: 100%; margin-top: 16px; background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 8px; border-radius: 8px; font-weight: 700; cursor: pointer;">View Company Profile</button>
                         </div>
                     </div>
                 </div>
             </div>
         `;
 
+        // Listeners
         document.getElementById('backBtn')?.addEventListener('click', () => {
-            const origin = sessionStorage.getItem('job_view_origin') || 'opportunities';
-            app.navigateTo(origin);
+            app.navigateTo(sessionStorage.getItem('job_view_origin') || 'opportunities');
         });
 
         document.getElementById('viewCompBtn')?.addEventListener('click', () => {
             app.viewCompany(job.comp_name);
         });
 
-        document.getElementById('applyNowBtn')?.addEventListener('click', () => {
-            alert('Application submitted successfully for ' + job.role);
-        });
+        const applyBtn = document.getElementById('applyNowBtn');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', async () => {
+                applyBtn.innerText = 'Submitting...';
+                applyBtn.disabled = true;
+                try {
+                    const res = await api.post('/applications', { job_id: jobId });
+                    alert(res.message || 'application submitted successfully');
+                    applyBtn.innerText = 'Applied Successfully';
+                    applyBtn.style.background = '#f1f5f9';
+                    applyBtn.style.color = '#64748b';
+                    applyBtn.style.border = '1px solid #e2e8f0';
+                } catch (err) {
+                    alert(err.message || 'Error submitting application');
+                    applyBtn.innerText = 'Apply for this Position';
+                    applyBtn.disabled = false;
+                }
+            });
+        }
 
     } catch (err) {
-        console.error(err);
         container.innerHTML = `<div class="card" style="padding:40px;text-align:center;color:red;">Error: ${err.message}</div>`;
     }
 }
