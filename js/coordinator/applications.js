@@ -119,7 +119,10 @@ function appRows() {
                 }
             </td>
             <td style="padding: 16px; text-align: center;">
-                <button class="btn-primary details-btn" data-sid="${a.s_id || a.student_id || ''}" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700;">Details</button>
+                <button class="btn-primary details-btn" data-sid="${a.s_id || a.student_id || ''}" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700; display: block; margin: 0 auto ${a.status === 'selected' ? '6px' : '0'};">Details</button>
+                ${a.status === 'selected' ? `
+                <button class="schedule-btn" data-sid="${a.s_id || a.student_id || ''}" data-jobid="${a.job_id || ''}" data-name="${a.studentName || ''}" data-company="${a.company || ''}" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700; background: white; border: 1px solid var(--primary); color: var(--primary); cursor: pointer; display: block; margin: 0 auto; transition: 0.2s;" onmouseover="this.style.background='var(--primary)'; this.style.color='white';" onmouseout="this.style.background='white'; this.style.color='var(--primary)';">Schedule</button>
+                ` : ''}
             </td>
         </tr>
     `).join('');
@@ -169,6 +172,19 @@ function wireEvents(container) {
 
     attachStatusEvents(container);
     attachDetailsEvents(container);
+    attachScheduleEvents(container);
+}
+
+function attachScheduleEvents(container) {
+    container.querySelectorAll('.schedule-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sid = btn.getAttribute('data-sid');
+            const jid = btn.getAttribute('data-jobid');
+            const name = btn.getAttribute('data-name');
+            const company = btn.getAttribute('data-company');
+            showScheduleModal(sid, jid, name, company);
+        });
+    });
 }
 
 function attachDetailsEvents(container) {
@@ -322,6 +338,77 @@ function applyFilters() {
         const fm = statusF === 'all' || a.status === statusF;
         return sm && fm;
     });
+}
+
+function showScheduleModal(s_id, job_id, name, company) {
+    let modal = document.getElementById('schedule-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'schedule-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+        document.body.appendChild(modal);
+    }
+    
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div style="background:white;width:500px;border-radius:16px;padding:32px;position:relative;box-shadow:0 20px 50px rgba(0,0,0,0.2);">
+            <button id="close-schedule" style="position:absolute;right:20px;top:20px;background:white;border:none;cursor:pointer;font-size:1.5rem;"><ion-icon name="close-outline"></ion-icon></button>
+            <h2 style="margin:0 0 8px;font-size:1.5rem;color:var(--primary);">Schedule Interview</h2>
+            <p style="color:var(--text-muted);margin:0 0 24px;">For <b>${name}</b> at <b>${company}</b></p>
+            
+            <form id="schedule-form" style="display:flex;flex-direction:column;gap:16px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div>
+                        <label style="display:block;font-size:0.8rem;font-weight:700;margin-bottom:6px;color:var(--text-muted);">DATE</label>
+                        <input type="date" id="sch-date" required style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;outline:none;">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:0.8rem;font-weight:700;margin-bottom:6px;color:var(--text-muted);">TIME</label>
+                        <input type="time" id="sch-time" required style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;outline:none;">
+                    </div>
+                </div>
+                <div>
+                    <label style="display:block;font-size:0.8rem;font-weight:700;margin-bottom:6px;color:var(--text-muted);">INTERVIEW MODE</label>
+                    <select id="sch-mode" required style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;outline:none;">
+                        <option value="online">Online</option>
+                        <option value="offline">Offline</option>
+                        <option value="hybrid">Hybrid</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block;font-size:0.8rem;font-weight:700;margin-bottom:6px;color:var(--text-muted);">PANEL NAME / LINK</label>
+                    <input type="text" id="sch-panel" placeholder="e.g. Technical Round 1 or Zoom Link" required style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;outline:none;">
+                </div>
+                <button type="submit" class="btn-primary" style="padding:12px;margin-top:12px;font-size:1rem;">Confirm Schedule</button>
+            </form>
+        </div>
+    `;
+
+    modal.querySelector('#close-schedule').onclick = () => modal.style.display = 'none';
+    
+    document.getElementById('schedule-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button');
+        btn.disabled = true;
+        btn.textContent = 'Scheduling...';
+        
+        try {
+            await api.post('/coordinator/interviews', {
+                s_id,
+                job_id,
+                interview_date: document.getElementById('sch-date').value,
+                interview_time: document.getElementById('sch-time').value,
+                mode: document.getElementById('sch-mode').value,
+                panel: document.getElementById('sch-panel').value
+            });
+            alert('Interview scheduled successfully!');
+            modal.style.display = 'none';
+        } catch (err) {
+            alert('Failed to schedule: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = 'Confirm Schedule';
+        }
+    };
 }
 
 function loadingHTML(p) {

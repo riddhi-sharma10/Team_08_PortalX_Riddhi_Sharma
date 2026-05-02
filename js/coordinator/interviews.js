@@ -27,10 +27,10 @@ function renderShell(container, rows) {
                         <thead>
                             <tr>
                                 <th>Student</th>
-                                <th>Company</th>
+                                <th>Company & Role</th>
                                 <th>Mode</th>
                                 <th>Panel</th>
-                                <th>Date</th>
+                                <th>Date & Time</th>
                                 <th>Result</th>
                             </tr>
                         </thead>
@@ -38,10 +38,13 @@ function renderShell(container, rows) {
                             ${rows.length ? rows.map(r => `
                                 <tr>
                                     <td><b>${r.studentName}</b></td>
-                                    <td>${r.company}</td>
+                                    <td>
+                                        <div style="font-weight: 700; color: var(--primary);">${r.company}</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-top: 2px;">${r.role}</div>
+                                    </td>
                                     <td><span class="tag tag-info" style="text-transform: capitalize;">${r.mode}</span></td>
                                     <td style="color:var(--text-muted);font-size:0.85rem;">${r.panel || '—'}</td>
-                                    <td>${r.date}</td>
+                                    <td>${r.date}<br><span style="font-size:0.75rem;color:var(--text-muted);">${r.time || 'TBA'}</span></td>
                                     <td><span class="tag ${resultTag(r.result)}">${r.result.toUpperCase()}</span></td>
                                 </tr>
                             `).join('') : `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">No interviews found.</td></tr>`}

@@ -16,13 +16,14 @@ export async function render(container, app) {
 
     try {
         // Fetch all student-related data in parallel
-        const [applications, jobs, profile] = await Promise.all([
+        const [applications, jobs, profile, interviews] = await Promise.all([
             api.get('/applications'),
             api.get('/jobs'),
-            api.get('/students/profile')
+            api.get('/students/profile'),
+            api.get('/students/interviews/upcoming').catch(() => [])
         ]);
 
-        renderDashboard(container, app, applications, jobs, profile);
+        renderDashboard(container, app, applications, jobs, profile, interviews);
     } catch (err) {
         container.innerHTML = `
             <div class="card" style="padding: 40px; text-align: center; margin: 24px;">
@@ -35,7 +36,7 @@ export async function render(container, app) {
     }
 }
 
-function renderDashboard(container, app, applications, jobs, profile) {
+function renderDashboard(container, app, applications, jobs, profile, interviews) {
     const isPlaced = profile.profile_status === 'placed';
     const isOptedOut = profile.profile_status === 'opted_out';
     const stats = {
@@ -145,6 +146,39 @@ function renderDashboard(container, app, applications, jobs, profile) {
 
                 <!-- Secondary Column (Timeline) -->
                 <div style="display: flex; flex-direction: column; gap: 32px;">
+                    
+                    <!-- Upcoming Interviews -->
+                    ${interviews && interviews.length > 0 ? `
+                    <div class="card" style="padding: 24px; background: white; border-top: 4px solid var(--primary);">
+                        <h3 style="margin-bottom: 20px; color: var(--text-main); font-weight: 800; font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
+                            <ion-icon name="calendar" style="color: var(--primary);"></ion-icon> Upcoming Interviews
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            ${interviews.map(inv => `
+                                <div style="background: #f8fafc; border: 1px solid var(--border); padding: 16px; border-radius: 12px; position: relative; overflow: hidden;">
+                                    <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--warning);"></div>
+                                    <h4 style="margin: 0 0 4px; font-weight: 800; color: var(--text-main);">${inv.company}</h4>
+                                    <p style="margin: 0 0 12px; font-size: 0.85rem; color: var(--primary); font-weight: 600;">${inv.role}</p>
+                                    
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.8rem; color: var(--text-muted);">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <ion-icon name="calendar-outline"></ion-icon> ${inv.date}
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <ion-icon name="time-outline"></ion-icon> ${inv.time || 'TBD'}
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <ion-icon name="laptop-outline"></ion-icon> <span style="text-transform: capitalize;">${inv.mode}</span>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <ion-icon name="people-outline"></ion-icon> ${inv.panel || 'TBD'}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
                     
                     <!-- Recruitment Path (Timeline) -->
                     <div class="card" style="padding: 24px; background: white;">

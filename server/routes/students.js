@@ -70,4 +70,26 @@ router.post('/opt-out', requireAuth, async (req, res) => {
     }
 });
 
+// Get upcoming interviews
+router.get('/interviews/upcoming', requireAuth, async (req, res) => {
+    if (req.user.role !== 'student') return res.status(403).json({ message: 'Access denied' });
+
+    try {
+        const student_id = req.user.entityId;
+        const [rows] = await pool.query(`
+            SELECT i.interview_id as id, c.comp_name as company, j.role, DATE_FORMAT(i.interview_date, '%e %b %Y') as date, TIME_FORMAT(i.interview_time, '%h:%i %p') as time, i.interview_mode as mode, i.panel_name as panel
+            FROM INTERVIEW i
+            JOIN JOB_PROFILE j ON i.job_id = j.job_id
+            JOIN COMPANY c ON j.comp_id = c.comp_id
+            WHERE i.s_id = ? AND i.interview_date >= CURDATE()
+            ORDER BY i.interview_date ASC, i.interview_time ASC
+        `, [student_id]);
+        
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error fetching upcoming interviews' });
+    }
+});
+
 export default router;

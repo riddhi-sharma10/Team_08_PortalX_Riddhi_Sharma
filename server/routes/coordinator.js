@@ -163,7 +163,7 @@ router.get('/interviews', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [rows] = await pool.query(`
-            SELECT i.interview_id AS id, s.s_name AS studentName, c.comp_name AS company, j.role, i.interview_mode AS mode, DATE_FORMAT(i.interview_date,'%e %b %Y') as date, i.interview_result as result
+            SELECT i.interview_id AS id, s.s_name AS studentName, c.comp_name AS company, j.role, i.interview_mode AS mode, i.panel_name AS panel, DATE_FORMAT(i.interview_date,'%e %b %Y') as date, TIME_FORMAT(i.interview_time, '%h:%i %p') as time, i.interview_result as result
             FROM INTERVIEW i
             INNER JOIN STUDENT s ON i.s_id = s.s_id
             INNER JOIN JOB_PROFILE j ON i.job_id = j.job_id
@@ -175,6 +175,28 @@ router.get('/interviews', async (req, res) => {
         res.json(rows.map(r => ({ ...r, id: Number(r.id), result: String(r.result || 'pending').toLowerCase() })));
     } catch (err) {
         res.status(500).json({ message: 'Error loading interviews' });
+    }
+});
+
+// Schedule new interview
+router.post('/interviews', async (req, res) => {
+    try {
+        const { s_id, job_id, interview_date, interview_time, mode, panel } = req.body;
+        const coordId = req.user.entityId;
+
+        // Verify student belongs to coord
+        const [student] = await pool.query('SELECT s_id FROM STUDENT WHERE s_id = ? AND coord_id = ?', [s_id, coordId]);
+        if (student.length === 0) return res.status(403).json({ message: 'Unauthorized: Student not assigned to you' });
+
+        await pool.query(`
+            INSERT INTO INTERVIEW (s_id, job_id, panel_name, interview_date, interview_time, interview_mode, interview_result)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending')
+        `, [s_id, job_id, panel || 'General Panel', interview_date, interview_time || null, mode || 'online']);
+
+        res.json({ message: 'Interview scheduled successfully' });
+    } catch (err) {
+        console.error('Error scheduling interview:', err);
+        res.status(500).json({ message: 'Failed to schedule interview' });
     }
 });
 
