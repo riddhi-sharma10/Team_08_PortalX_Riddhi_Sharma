@@ -3,6 +3,7 @@ import { api } from '../api.js';
 
 let users = [];
 let currentApp = null;
+let currentContainer = null;
 
 const state = {
     currentPage: 1,
@@ -11,21 +12,29 @@ const state = {
     pendingDelete: null
 };
 
-export async function render(container, app) {
-    currentApp = app;
-    resetUsersState();
+export async function render(container, appOrRefresh = false) {
+    if (container) currentContainer = container;
+    
+    // Determine if we were passed the 'app' object (initial load) or 'true' (silent refresh)
+    const isRefresh = appOrRefresh === true;
+    if (!isRefresh && typeof appOrRefresh === 'object') {
+        currentApp = appOrRefresh;
+    }
+    
+    const app = currentApp;
 
-    // Show loading state
-    container.innerHTML = `
-        <div class="admin-users-shell" style="display:flex;align-items:center;justify-content:center;min-height:400px;">
-            <div style="text-align:center;color:var(--text-muted);">
-                <ion-icon name="hourglass-outline" style="font-size:2.5rem;display:block;margin:0 auto 12px;"></ion-icon>
-                <p>Loading user directory...</p>
+    if (!isRefresh) {
+        resetUsersState();
+        container.innerHTML = `
+            <div class="admin-users-shell" style="display:flex;align-items:center;justify-content:center;min-height:400px;">
+                <div style="text-align:center;color:var(--text-muted);">
+                    <ion-icon name="sync-outline" style="font-size:2.5rem;display:block;margin:0 auto 12px;animation:spin 2s linear infinite;"></ion-icon>
+                    <p>Syncing user directory...</p>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 
-    // Fetch all roles in parallel
     try {
         const [studentRows, coordRows, adminRows] = await Promise.all([
             api.get('/admin/users?role=Student'),
@@ -34,8 +43,14 @@ export async function render(container, app) {
         ]);
         users = [...(studentRows || []), ...(coordRows || []), ...(adminRows || [])];
     } catch (err) {
-        console.error('Failed to load users from API:', err);
-        users = [];
+        console.error('Failed to load users:', err);
+        if (!isRefresh) users = [];
+    }
+
+    if (isRefresh) {
+        hydrateKpis();
+        renderTable();
+        return;
     }
 
     container.innerHTML = `
@@ -440,18 +455,19 @@ function updateAddButtonVisibility() {
 }
 
 function bindModalEvents(container, app) {
-    const studentModal = document.getElementById('addStudentModal');
-    const coordModal = document.getElementById('addCoordModal');
-    const openBtn = document.getElementById('user-add-btn');
+    const studentModal = container.querySelector('#addStudentModal');
+    const coordModal = container.querySelector('#addCoordModal');
+    const openBtn = container.querySelector('#user-add-btn');
 
-    function openModal() {
+    function openModal(e) {
+        if (e) e.stopPropagation();
         const modal = state.filters.viewRole === 'Student' ? studentModal : coordModal;
         if (modal) {
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
 
             if (state.filters.viewRole === 'Student') {
-                const dobInput = document.getElementById('studentDob');
+                const dobInput = container.querySelector('#studentDob');
                 if (dobInput) {
                     const today = new Date();
                     const maxDate = new Date(today.getFullYear() - 16, today.getMonth(), today.getDate());
@@ -459,18 +475,18 @@ function bindModalEvents(container, app) {
                 }
 
                 // Reset placed fields
-                const placedFields = document.getElementById('placedFields');
+                const placedFields = container.querySelector('#placedFields');
                 if (placedFields) placedFields.style.display = 'none';
             }
         }
     }
 
-    document.getElementById('studentProfileStatus')?.addEventListener('change', (e) => {
-        const fields = document.getElementById('placedFields');
+    container.querySelector('#studentProfileStatus')?.addEventListener('change', (e) => {
+        const fields = container.querySelector('#placedFields');
         if (fields) {
             fields.style.display = e.target.value === 'placed' ? 'grid' : 'none';
-            const companyInput = document.getElementById('studentCompany');
-            const packageInput = document.getElementById('studentPackage');
+            const companyInput = container.querySelector('#studentCompany');
+            const packageInput = container.querySelector('#studentPackage');
             if (companyInput) companyInput.required = e.target.value === 'placed';
             if (packageInput) packageInput.required = e.target.value === 'placed';
         }
@@ -480,141 +496,125 @@ function bindModalEvents(container, app) {
         if (studentModal) studentModal.style.display = 'none';
         if (coordModal) coordModal.style.display = 'none';
         document.body.style.overflow = 'auto';
-        const studentForm = document.getElementById('studentForm');
-        const coordForm = document.getElementById('coordForm');
-        if (studentForm) studentForm.reset();
-        if (coordForm) coordForm.reset();
+        const sForm = container.querySelector('#studentForm');
+        const cForm = container.querySelector('#coordForm');
+        if (sForm) sForm.reset();
+        if (cForm) cForm.reset();
     }
 
     if (openBtn) openBtn.addEventListener('click', openModal);
 
-    ['closeStudentModalBtn', 'cancelStudentBtn', 'closeCoordModalBtn', 'cancelCoordBtn'].forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) btn.addEventListener('click', closeModal);
-    });
-
+    // Close on backdrop click (ONLY if clicking exactly the backdrop)
     [studentModal, coordModal].forEach(modal => {
         if (modal) {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) closeModal();
             });
+            
+            // Prevent clicks inside the white box from closing the modal
+            const content = modal.querySelector('div');
+            if (content) {
+                content.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            }
         }
     });
 
-    const studentForm = document.getElementById('studentForm');
-    if (studentForm) {
-        studentForm.addEventListener('submit', async (e) => {
+    ['closeStudentModalBtn', 'cancelStudentBtn', 'closeCoordModalBtn', 'cancelCoordBtn'].forEach(id => {
+        const btn = container.querySelector(`#${id}`);
+        if (btn) btn.addEventListener('click', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            closeModal();
+        });
+    });
 
-            const name = document.getElementById('studentName').value.trim();
-            const email = document.getElementById('studentEmail').value.trim();
-            const phone = document.getElementById('studentPhone').value.trim();
-            const dob = document.getElementById('studentDob').value || null;
-            const dept = document.getElementById('studentDept').value;
-            const gradYear = document.getElementById('studentGradYear').value;
-            const cgpa = document.getElementById('studentCgpa').value || null;
-            const profileStatus = document.getElementById('studentProfileStatus').value;
-            const company = document.getElementById('studentCompany')?.value || null;
-            const packageLpa = document.getElementById('studentPackage')?.value || null;
+    // Use Event Delegation for Form Submissions (Bulletproof)
+    container.addEventListener('submit', async (e) => {
+        const form = e.target;
+        if (!form) return;
 
-            // JS-side validation
-            const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
-            if (!emailRegex.test(email)) {
-                alert('Please enter a valid email address (e.g., student@university.edu).');
-                return;
-            }
+        if (form.id === 'studentForm') {
+            e.preventDefault();
+            e.stopPropagation();
 
-            if (phone && !/^[0-9]{10}$/.test(phone)) {
-                alert('Phone number must be exactly 10 digits (numbers only, no spaces or dashes).');
-                return;
-            }
-
-            if (dob) {
-                const birthDate = new Date(dob);
-                const today = new Date();
-                const age = today.getFullYear() - birthDate.getFullYear() -
-                    ((today.getMonth() < birthDate.getMonth() ||
-                        (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) ? 1 : 0);
-                if (age < 16) {
-                    alert('Student must be at least 16 years old.');
-                    return;
-                }
-            }
-
-            const submitBtn = document.getElementById('submitStudentBtn');
+            const submitBtn = form.querySelector('#submitStudentBtn');
             if (submitBtn) {
                 submitBtn.disabled = true;
-                submitBtn.textContent = 'Saving...';
+                submitBtn.textContent = 'Processing...';
             }
 
-            const payload = {
-                name, email, phone, dob, dept,
-                graduation_yr: gradYear, cgpa, profile_status: profileStatus,
-                company, packageLpa
-            };
-
             try {
-                await api.post('/admin/student', payload);
-                closeModal();
-                showSuccess('Student added successfully and database synced.');
-                render(container, app);
+                const payload = {
+                    name: form.querySelector('#studentName').value.trim(),
+                    email: form.querySelector('#studentEmail').value.trim(),
+                    phone: form.querySelector('#studentPhone').value.trim(),
+                    dob: form.querySelector('#studentDob').value || null,
+                    dept: form.querySelector('#studentDept').value,
+                    graduation_yr: form.querySelector('#studentGradYear').value,
+                    cgpa: form.querySelector('#studentCgpa').value || null,
+                    profile_status: form.querySelector('#studentProfileStatus').value,
+                    company: form.querySelector('#studentCompany')?.value || null,
+                    packageLpa: form.querySelector('#studentPackage')?.value || null
+                };
+
+                // Simple validation
+                if (!payload.name || !payload.email) throw new Error('Please fill all required fields.');
+
+                const res = await api.post('/admin/student', payload);
+                if (res) {
+                    closeModal();
+                    await render(container, true);
+                    showSuccess('Student account created and database updated.');
+                }
             } catch (err) {
-                console.error(err);
-                alert('Error adding student: ' + err.message);
+                console.error('Submit Error:', err);
+                alert('Add Student Failed: ' + err.message);
             } finally {
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Add Student';
                 }
             }
-        });
-    }
+        }
 
-    const coordForm = document.getElementById('coordForm');
-    if (coordForm) {
-        coordForm.addEventListener('submit', async (e) => {
+        if (form.id === 'coordForm') {
             e.preventDefault();
-
-            const name = document.getElementById('coordName').value.trim();
-            const email = document.getElementById('coordEmail').value.trim();
-            const phone = document.getElementById('coordPhone').value.trim();
-            const dept = document.getElementById('coordDept').value;
-            const cgdc_id = document.getElementById('coordCgdcId').value || null;
-
-            // JS-side validation
-            const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
-            if (!emailRegex.test(email)) {
-                alert('Please enter a valid email address (e.g., coord@university.edu).');
-                return;
-            }
-
-            if (phone && !/^[0-9]{10}$/.test(phone)) {
-                alert('Phone number must be exactly 10 digits (numbers only, no spaces or dashes).');
-                return;
-            }
-
-            const submitBtn = document.getElementById('submitCoordBtn');
+            e.stopPropagation();
+            
+            const submitBtn = form.querySelector('#submitCoordBtn');
             if (submitBtn) {
                 submitBtn.disabled = true;
-                submitBtn.textContent = 'Saving...';
+                submitBtn.textContent = 'Processing...';
             }
 
             try {
-                await api.post('/admin/coordinator', { name, email, phone_no: phone, dept, cgdc_id });
-                closeModal();
-                showSuccess('Coordinator added successfully.');
-                render(container, app);
+                const payload = {
+                    name: form.querySelector('#coordName').value.trim(),
+                    email: form.querySelector('#coordEmail').value.trim(),
+                    phone_no: form.querySelector('#coordPhone').value.trim(),
+                    dept: form.querySelector('#coordDept').value,
+                    cgdc_id: form.querySelector('#coordCgdcId').value || null
+                };
+
+                const res = await api.post('/admin/coordinator', payload);
+                if (res) {
+                    closeModal();
+                    await render(container, true);
+                    showSuccess('Coordinator account created.');
+                }
             } catch (err) {
-                console.error(err);
-                alert('Error adding coordinator: ' + err.message);
+                console.error('Submit Error:', err);
+                alert('Add Coordinator Failed: ' + err.message);
             } finally {
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Add Coordinator';
                 }
             }
-        });
-    }
+        }
+    });
 
     container.addEventListener('click', async (e) => {
         const deleteBtn = e.target.closest('.user-delete-btn');

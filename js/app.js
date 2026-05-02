@@ -17,9 +17,14 @@ const App = {
     },
 
     setupTabSync() {
+        const isModalOpen = () => {
+            return !!document.querySelector('[id*="Modal"][style*="display: flex"]') || 
+                   !!document.querySelector('[id*="modal"][style*="display: flex"]');
+        };
+
         // Re-fetch data on tab switch back
         const handleVisibility = () => {
-            if (document.visibilityState === 'visible' && this.state.user) {
+            if (document.visibilityState === 'visible' && this.state.user && !isModalOpen()) {
                 console.log('[TabSync] Tab visible — refreshing data');
                 this.navigateTo(this.state.currentPage);
             }
@@ -27,7 +32,7 @@ const App = {
 
         // Re-fetch on window focus (e.g., coming back from another app)
         const handleFocus = () => {
-            if (this.state.user) {
+            if (this.state.user && !isModalOpen()) {
                 console.log('[TabSync] Window focused — refreshing data');
                 this.navigateTo(this.state.currentPage);
             }
@@ -38,7 +43,7 @@ const App = {
 
         // Also auto-refresh every 30 seconds while tab is open
         setInterval(() => {
-            if (!document.hidden && this.state.user) {
+            if (!document.hidden && this.state.user && !isModalOpen()) {
                 console.log('[AutoRefresh] 30s tick — refreshing data');
                 this.navigateTo(this.state.currentPage);
             }
