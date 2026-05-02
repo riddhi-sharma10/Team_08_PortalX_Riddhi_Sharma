@@ -85,7 +85,7 @@ function renderATSPage(container, resumes) {
                             <p id="role-desc" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; display: none;"></p>
                         </div>
 
-                        <button id="analyze-btn" class="btn-primary" style="width: 100%; padding: 14px; font-size: 1.05rem; justify-content: center;">
+                        <button id="analyze-btn" type="button" class="btn-primary" style="width: 100%; padding: 14px; font-size: 1.05rem; justify-content: center;">
                             <ion-icon name="analytics-outline" id="analyze-icon" style="font-size: 1.2rem;"></ion-icon>
                             <span id="analyze-text">Start Analysis</span>
                         </button>
@@ -214,7 +214,11 @@ function renderResult(result) {
     
     const strokeOffset = 263.8 * (1 - sc / 100);
 
-    const breakdown = result.breakdown || { keyword: Math.round(sc*0.6), section: Math.round(sc*0.25), format: Math.round(sc*0.15) };
+    const breakdown = result.breakdown || { 
+        keyword: result.keyword_score || Math.round(sc * 0.6), 
+        section: result.section_score || Math.round(sc * 0.25), 
+        format: result.format_score || Math.round(sc * 0.15) 
+    };
     const maxK = 50, maxS = 25, maxF = 15;
 
     let keywordsHtml = '';
@@ -222,6 +226,8 @@ function renderResult(result) {
     const missing = result.missingKeywords || result.keywords_missing || [];
     const bonus = result.bonusKeywords || [];
     
+    console.log('[ATS Debug] Rendering result:', { score: sc, found, missing });
+
     if (found.length || missing.length) {
         keywordsHtml = `
             <div style="margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border);">
@@ -280,7 +286,7 @@ function renderResult(result) {
     }
 
     container.innerHTML = `
-        <div class="card" style="padding: 32px; height: 100%; display: flex; flex-direction: column;">
+        <div class="card" style="padding: 32px; max-height: 800px; overflow-y: auto; display: flex; flex-direction: column; box-shadow: var(--shadow-lg);">
             
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px;">
                 <div>
@@ -342,133 +348,175 @@ function renderBar(label, val, max, color) {
     `;
 }
 
+let selectedFile = null;
+
 function setupHandlers(container) {
-    setTimeout(() => {
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('resume-file-input');
-        const analyzeBtn = document.getElementById('analyze-btn');
-        const roleSelect = document.getElementById('job-role-select');
-        const roleDesc = document.getElementById('role-desc');
-        let selectedFile = null;
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('resume-file-input');
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const roleSelect = document.getElementById('job-role-select');
+    const roleDesc = document.getElementById('role-desc');
 
-        window.__loadAtsResult = (id) => loadResultDetails(id);
+    // Reset state on new render
+    selectedFile = null;
+
+    window.__loadAtsResult = (id) => loadResultDetails(id);
+    
+    window.__deleteAts = async (id) => {
+        if (!confirm('Delete this record?')) return;
+        try {
+            await api.delete(`/resumes/${id}`);
+            const resumes = await api.get('/resumes');
+            const tbody = document.getElementById('history-tbody');
+            if (tbody) tbody.innerHTML = buildHistoryRows(resumes);
+            
+            if (resumes.length === 0) {
+                const rc = document.getElementById('result-container');
+                if (rc) rc.innerHTML = `
+                    <div class="card" style="padding: 40px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #f8fafc; border: 1px dashed var(--border);">
+                        <ion-icon name="document-lock-outline" style="font-size: 4rem; color: var(--text-muted); opacity: 0.5; margin-bottom: 16px;"></ion-icon>
+                        <h3 style="color: var(--text-main); margin-bottom: 8px;">No Recent Analysis</h3>
+                        <p style="color: var(--text-muted); font-size: 0.95rem; max-width: 250px;">Upload a resume to see your ATS score breakdown and detailed feedback.</p>
+                    </div>`;
+            } else {
+                loadResultDetails(resumes[0].id);
+            }
+        } catch(e) { alert('Error deleting: ' + e.message); }
+    };
+
+    if (roleSelect && roleDescriptions) {
+        roleSelect.addEventListener('change', (e) => {
+            const desc = roleDescriptions[e.target.value];
+            if (desc && roleDesc) {
+                roleDesc.textContent = desc;
+                roleDesc.style.display = 'block';
+            }
+        });
+    }
+
+    if (dropZone && fileInput) {
+        // Remove old listeners by replacing the element or just being careful
+        // Since we re-render the whole innerHTML, old listeners on old elements are gone.
         
-        window.__deleteAts = async (id) => {
-            if (!confirm('Delete this record?')) return;
-            try {
-                await api.delete(`/resumes/${id}`);
-                const resumes = await api.get('/resumes');
-                document.getElementById('history-tbody').innerHTML = buildHistoryRows(resumes);
-                if (resumes.length === 0) {
-                    const rc = document.getElementById('result-container');
-                    if (rc) rc.innerHTML = `
-                        <div class="card" style="padding: 40px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #f8fafc; border: 1px dashed var(--border);">
-                            <ion-icon name="document-lock-outline" style="font-size: 4rem; color: var(--text-muted); opacity: 0.5; margin-bottom: 16px;"></ion-icon>
-                            <h3 style="color: var(--text-main); margin-bottom: 8px;">No Recent Analysis</h3>
-                            <p style="color: var(--text-muted); font-size: 0.95rem; max-width: 250px;">Upload a resume to see your ATS score breakdown and detailed feedback.</p>
-                        </div>`;
-                } else {
-                    loadResultDetails(resumes[0].id);
-                }
-            } catch(e) { alert('Error deleting: ' + e.message); }
+        dropZone.onclick = () => fileInput.click();
+        
+        dropZone.ondragover = (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'var(--accent)';
+            dropZone.style.background = '#fffbeb';
         };
-
-        if (roleSelect && roleDescriptions) {
-            roleSelect.addEventListener('change', (e) => {
-                const desc = roleDescriptions[e.target.value];
-                if (desc && roleDesc) {
-                    roleDesc.textContent = desc;
-                    roleDesc.style.display = 'block';
-                }
-            });
-        }
-
-        if (dropZone && fileInput) {
-            dropZone.addEventListener('click', () => fileInput.click());
-            dropZone.addEventListener('dragover', e => {
-                e.preventDefault();
-                dropZone.style.borderColor = 'var(--accent)';
-                dropZone.style.background = '#fffbeb';
-            });
-            dropZone.addEventListener('dragleave', () => {
+        
+        dropZone.ondragleave = () => {
+            if (!selectedFile) {
                 dropZone.style.borderColor = 'var(--border)';
                 dropZone.style.background = '#f8fafc';
-            });
-            dropZone.addEventListener('drop', e => {
-                e.preventDefault();
-                dropZone.style.borderColor = 'var(--border)';
-                dropZone.style.background = '#f8fafc';
-                if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-            });
-            fileInput.addEventListener('change', e => {
-                if (e.target.files[0]) handleFile(e.target.files[0]);
-            });
-
-            function handleFile(file) {
-                if (!file.name.toLowerCase().endsWith('.pdf')) { alert('Only PDFs allowed.'); return; }
-                if (file.size > 5 * 1024 * 1024) { alert('Max 5MB.'); return; }
-                selectedFile = file;
-                document.getElementById('drop-title').textContent = file.name;
-                document.getElementById('drop-sub').textContent = `${(file.size/1024).toFixed(1)} KB - Ready to analyze`;
-                document.getElementById('drop-icon').setAttribute('name', 'document-text');
+            } else {
                 dropZone.style.borderColor = 'var(--success)';
                 dropZone.style.background = '#f0fdf4';
             }
+        };
+        
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+        };
+        
+        fileInput.onchange = (e) => {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        };
+
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.pdf')) { alert('Only PDFs allowed.'); return; }
+            if (file.size > 5 * 1024 * 1024) { alert('Max 5MB.'); return; }
+            selectedFile = file;
+            
+            const titleEl = document.getElementById('drop-title');
+            const subEl = document.getElementById('drop-sub');
+            const iconEl = document.getElementById('drop-icon');
+            
+            if (titleEl) titleEl.textContent = file.name;
+            if (subEl) subEl.textContent = `${(file.size/1024).toFixed(1)} KB - Ready to analyze`;
+            if (iconEl) iconEl.setAttribute('name', 'document-text');
+            
+            dropZone.style.borderColor = 'var(--success)';
+            dropZone.style.background = '#f0fdf4';
         }
+    }
 
-        if (analyzeBtn) {
-            analyzeBtn.addEventListener('click', async () => {
-                if (!selectedFile) return alert('Select a PDF.');
-                if (!roleSelect.value) return alert('Select a Target Role.');
+    if (analyzeBtn) {
+        analyzeBtn.onclick = async () => {
+            if (!selectedFile) {
+                alert('Please select a PDF resume file first.');
+                return;
+            }
+            if (!roleSelect.value) {
+                alert('Please select a Target Role for analysis.');
+                return;
+            }
 
-                const btnText = document.getElementById('analyze-text');
-                const btnIcon = document.getElementById('analyze-icon');
-                
-                analyzeBtn.disabled = true;
-                btnText.textContent = 'Scanning...';
+            const btnText = document.getElementById('analyze-text');
+            const btnIcon = document.getElementById('analyze-icon');
+            
+            analyzeBtn.disabled = true;
+            if (btnText) btnText.textContent = 'Scanning...';
+            if (btnIcon) {
                 btnIcon.setAttribute('name', 'sync');
                 btnIcon.style.animation = 'spin 1s linear infinite';
+            }
 
-                try {
-                    const fd = new FormData();
-                    fd.append('resume', selectedFile);
-                    fd.append('jobRole', roleSelect.value);
+            try {
+                const fd = new FormData();
+                fd.append('resume', selectedFile);
+                fd.append('jobRole', roleSelect.value);
 
-                    // Re-render result side to loading state immediately
-                    const rc = document.getElementById('result-container');
-                    if (rc) rc.innerHTML = `
-                        <div class="card" style="padding: 40px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                            <ion-icon name="sync-outline" style="font-size: 3rem; color: var(--primary); animation: spin 1s linear infinite;"></ion-icon>
-                            <p style="color: var(--text-muted); margin-top: 16px;">Analyzing resume structure and keywords...</p>
-                        </div>`;
+                const rc = document.getElementById('result-container');
+                if (rc) rc.innerHTML = `
+                    <div class="card" style="padding: 40px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                        <ion-icon name="sync-outline" style="font-size: 3rem; color: var(--primary); animation: spin 1s linear infinite;"></ion-icon>
+                        <p style="color: var(--text-muted); margin-top: 16px;">Analyzing resume structure and keywords...</p>
+                    </div>`;
 
-                    const result = await api.postForm('/resumes/analyze', fd);
-                    
-                    renderResult(result);
+                const result = await api.postForm('/resumes/analyze', fd);
+                renderResult(result);
 
-                    const updated = await api.get('/resumes');
-                    document.getElementById('history-tbody').innerHTML = buildHistoryRows(updated);
-                    
-                    // Reset upload area
-                    selectedFile = null;
-                    fileInput.value = '';
-                    document.getElementById('drop-title').textContent = 'Click or drag PDF here';
-                    document.getElementById('drop-sub').textContent = 'Max size: 5MB';
-                    document.getElementById('drop-icon').setAttribute('name', 'cloud-upload-outline');
+                const updated = await api.get('/resumes');
+                const tbody = document.getElementById('history-tbody');
+                if (tbody) tbody.innerHTML = buildHistoryRows(updated);
+                
+                // Reset upload area
+                selectedFile = null;
+                if (fileInput) fileInput.value = '';
+                
+                const titleEl = document.getElementById('drop-title');
+                const subEl = document.getElementById('drop-sub');
+                const iconEl = document.getElementById('drop-icon');
+                
+                if (titleEl) titleEl.textContent = 'Click or drag PDF here';
+                if (subEl) subEl.textContent = 'Max size: 5MB';
+                if (iconEl) iconEl.setAttribute('name', 'cloud-upload-outline');
+                
+                if (dropZone) {
                     dropZone.style.borderColor = 'var(--border)';
                     dropZone.style.background = '#f8fafc';
+                }
 
-                } catch (e) {
+            } catch (e) {
+                console.error('ANALYSIS ERROR:', e);
+                // If it's a fetch error but server finished, try to get the latest anyway
+                const resumes = await api.get('/resumes');
+                if (resumes && resumes.length > 0) {
+                    loadResultDetails(resumes[0].id);
+                } else {
                     alert('Analysis failed: ' + e.message);
-                    const resumes = await api.get('/resumes');
-                    if (resumes && resumes.length > 0) loadResultDetails(resumes[0].id);
-                } finally {
-                    analyzeBtn.disabled = false;
-                    btnText.textContent = 'Start Analysis';
+                }
+            } finally {
+                analyzeBtn.disabled = false;
+                if (btnText) btnText.textContent = 'Start Analysis';
+                if (btnIcon) {
                     btnIcon.setAttribute('name', 'analytics-outline');
                     btnIcon.style.animation = '';
                 }
-            });
-        }
-    }, 0);
+            }
+        };
+    }
 }

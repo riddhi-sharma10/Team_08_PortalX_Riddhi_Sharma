@@ -101,6 +101,8 @@ const App = {
         if (savedUser && token) {
             this.state.user = JSON.parse(savedUser);
             this.state.role = this.state.user.role;
+            const savedPage = sessionStorage.getItem('current_page');
+            if (savedPage) this.state.currentPage = savedPage;
             this.showPortal();
         } else {
             this.showLogin();
@@ -129,12 +131,14 @@ const App = {
         this.Sidebar.render(this.state.role, this);
         this.Navbar.render(this.state.user);
         
-        // Load default page
-        this.navigateTo('dashboard');
+        // Load saved page or default to dashboard
+        const savedPage = sessionStorage.getItem('current_page');
+        this.navigateTo(savedPage || 'dashboard');
     },
 
     async navigateTo(pageId) {
         this.state.currentPage = pageId;
+        sessionStorage.setItem('current_page', pageId);
         const pageContent = document.getElementById('page-content');
         const roleFolder = this.state.role === 'admin' ? 'cgdc_admin' : this.state.role;
         

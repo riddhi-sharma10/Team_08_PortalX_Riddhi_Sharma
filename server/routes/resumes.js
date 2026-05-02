@@ -92,10 +92,9 @@ router.post('/analyze', requireAuth, upload.single('resume'), async (req, res) =
             return res.status(400).json({ error: 'jobRole is required.' });
         }
 
-        // 1. Extract text from PDF
+        // 1. Extract text from PDF using the installed PDFParse library
         const pdfBuffer = fs.readFileSync(filePath);
         const parser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
-        await parser.load();
         const textResult = await parser.getText();
         const resumeText = textResult.text || '';
 
@@ -181,6 +180,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 function tryParseJSON(val, fallback) {
     if (!val) return fallback;
+    if (typeof val === 'object') return val;
     try { return JSON.parse(val); } catch { return fallback; }
 }
 
