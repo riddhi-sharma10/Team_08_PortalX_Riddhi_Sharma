@@ -19,7 +19,7 @@ export const Sidebar = {
                 { id: 'applications', label: 'App Management', icon: 'people-outline' },
                 { id: 'company', label: 'Company View', icon: 'business-outline' },
             ],
-            cgdc_admin: [
+            admin: [
                 { id: 'dashboard', label: 'Dashboard', icon: 'grid-outline' },
                 { id: 'users', label: 'User Directory', icon: 'people-circle-outline' },
                 { id: 'assignments', label: 'Delegation Portal', icon: 'git-network-outline' },

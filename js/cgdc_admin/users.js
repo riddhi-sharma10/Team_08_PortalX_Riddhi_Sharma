@@ -2,6 +2,7 @@
 import { api } from '../api.js';
 
 let users = [];
+let currentApp = null;
 
 const state = {
     currentPage: 1,
@@ -11,6 +12,7 @@ const state = {
 };
 
 export async function render(container, app) {
+    currentApp = app;
     resetUsersState();
 
     // Show loading state
@@ -109,7 +111,6 @@ export async function render(container, app) {
                                         <option value="all">All</option>
                                         <option value="active">Active</option>
                                         <option value="placed">Placed</option>
-                                        <option value="rejected">Rejected</option>
                                         <option value="opted_out">Opted Out</option>
                                         <option value="not_eligible">Not Eligible</option>
                                     </select>
@@ -722,6 +723,26 @@ function renderTable() {
         ? pageRows.map((user, idx) => renderRow(user, start + idx + 1)).join('')
         : `<tr><td colspan="${noDataColspan}" style="text-align:center;color:var(--text-muted);">No users match the selected filters.</td></tr>`;
 
+    // Bind Profile Buttons
+    tbody.querySelectorAll('.student-profile-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sid = btn.dataset.id;
+            sessionStorage.setItem('selectedStudentId', sid);
+            currentApp.navigateTo('student_profile');
+        });
+    });
+
+    // Bind Delete Buttons (existing logic)
+    tbody.querySelectorAll('.user-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sid = btn.dataset.id;
+            const role = btn.dataset.role;
+            state.pendingDelete = { id: sid, role: role };
+            document.getElementById('delete-modal-role').textContent = role;
+            document.getElementById('deleteConfirmModal').style.display = 'flex';
+        });
+    });
+
     renderPagination(filtered.length, pages);
     renderSummary(filtered.length, start, pageRows.length);
 }
@@ -774,12 +795,21 @@ function renderRow(user, serial) {
             ${includeBranch ? `<td>${user.branch || '-'}</td>` : ''}
             <td>${user.entityId}</td>
             <td><span class="tag ${getStatusTag(user.status)}">${formatStatusLabel(user.status)}</span></td>
-            ${(user.role.toLowerCase() === 'student' || user.role.toLowerCase() === 'coordinator') ?
+            ${user.role.toLowerCase() === 'student' ?
+            `<td style="text-align: right;">
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button class="student-profile-btn" data-id="${user.entityIdRaw}" style="background: #eff6ff; border: 1px solid #bfdbfe; color: var(--primary); padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;">View Profile</button>
+                        <button class="user-delete-btn" data-role="${user.role.toLowerCase()}" data-id="${user.entityIdRaw}" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem; padding: 4px;">
+                            <ion-icon name="trash-outline"></ion-icon>
+                        </button>
+                    </div>
+                </td>` : 
+            (user.role.toLowerCase() === 'coordinator' ?
             `<td style="text-align: right;">
                     <button class="user-delete-btn" data-role="${user.role.toLowerCase()}" data-id="${user.entityIdRaw}" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem; padding: 4px;">
                         <ion-icon name="trash-outline"></ion-icon>
                     </button>
-                </td>` : '<td></td>'
+                </td>` : '<td></td>')
         }
         </tr>
     `;
@@ -861,8 +891,9 @@ function getRoleTag(role) {
 
 function getStatusTag(status) {
     const s = String(status).toLowerCase();
-    if (s === 'active' || s === 'placed') return 'tag-success';
-    if (s === 'active' || s === 'pending') return 'tag-warning';
+    if (s === 'placed') return 'tag-success';
+    if (s === 'active') return 'tag-info';
+    if (s === 'pending') return 'tag-warning';
     if (s === 'rejected' || s === 'not_eligible' || s === 'suspended') return 'tag-danger';
     if (s === 'opted_out' || s === 'inactive') return 'tag-muted';
     return 'tag-info';

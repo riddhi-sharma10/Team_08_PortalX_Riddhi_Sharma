@@ -82,7 +82,7 @@ router.get('/info/:id', requireAuth, async (req, res) => {
             FROM JOB_PROFILE j
             JOIN COMPANY c ON j.comp_id = c.comp_id
             WHERE j.job_id = ?
-        `, [req.user.entityId, id]);
+        `, [req.user.entityId || 0, id]);
 
         if (jobs.length === 0) return res.status(404).json({ message: 'Job not found' });
         const job = jobs[0];

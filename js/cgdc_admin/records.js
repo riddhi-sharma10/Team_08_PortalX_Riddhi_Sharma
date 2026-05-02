@@ -195,7 +195,8 @@ function renderPage(container, app) {
                         <option value="all" ${recordsState.status === 'all' ? 'selected' : ''}>All Status</option>
                         <option value="Placed" ${recordsState.status === 'Placed' ? 'selected' : ''}>Placed</option>
                         <option value="Active" ${recordsState.status === 'Active' ? 'selected' : ''}>Active</option>
-                        <option value="Rejected" ${recordsState.status === 'Rejected' ? 'selected' : ''}>Rejected</option>
+                        <option value="Opted Out" ${recordsState.status === 'Opted Out' ? 'selected' : ''}>Opted Out</option>
+                        <option value="Not Eligible" ${recordsState.status === 'Not Eligible' ? 'selected' : ''}>Not Eligible</option>
                     </select>
 
                     <select id="admin-record-dept-filter" aria-label="Filter by department">
@@ -208,7 +209,8 @@ function renderPage(container, app) {
                     ${renderStatusChip('all', 'All', allRecords.length)}
                     ${renderStatusChip('Placed', 'Placed', statusSummary.Placed)}
                     ${renderStatusChip('Active', 'Active', statusSummary['Active'])}
-                    ${renderStatusChip('Rejected', 'Rejected', statusSummary.Rejected)}
+                    ${renderStatusChip('Opted Out', 'Opted Out', statusSummary['Opted Out'])}
+                    ${renderStatusChip('Not Eligible', 'Not Eligible', statusSummary['Not Eligible'])}
                 </div>
 
                 <div class="data-table-container">
@@ -343,7 +345,7 @@ function getStatusSummary(records) {
         const key = record.status;
         acc[key] = (acc[key] || 0) + 1;
         return acc;
-    }, { Placed: 0, 'Active': 0, Rejected: 0 });
+    }, { Placed: 0, 'Active': 0, 'Opted Out': 0, 'Not Eligible': 0 });
 }
 
 function getPlacementRate(records) {
@@ -379,10 +381,10 @@ function renderStatusChip(status, label, count) {
 }
 
 function formatStatusLabel(status) {
-    // The API normalizes statuses to placed/active/rejected
     if (status === 'placed') return 'Placed';
     if (status === 'active') return 'Active';
-    if (status === 'rejected') return 'Rejected';
+    if (status === 'opted_out' || status === 'Opted Out') return 'Opted Out';
+    if (status === 'not_eligible' || status === 'Not Eligible') return 'Not Eligible';
     return 'Active';
 }
 
@@ -396,6 +398,8 @@ function getInitials(name) {
 
 function getStatusTag(status) {
     if (status === 'Placed') return 'tag-success';
-    if (status === 'Active') return 'tag-warning';
-    return 'tag-danger';
+    if (status === 'Active') return 'tag-info';
+    if (status === 'Opted Out') return 'tag-muted';
+    if (status === 'Not Eligible') return 'tag-danger';
+    return 'tag-info';
 }

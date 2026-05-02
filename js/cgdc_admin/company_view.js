@@ -156,8 +156,16 @@ export async function render(container, app) {
                                                 </div>
                                                 <div style="padding: 14px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
                                                     <p style="font-size: 0.7rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin: 0 0 8px 0;">Required Skills</p>
-                                                    <p style="font-size: 0.9rem; font-weight: 600; color: #1e40af; margin: 0;">${pos.skills}</p>
+                                                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                                        ${pos.skills && pos.skills !== 'N/A'
+                                                            ? pos.skills.split(',').map(s => `<span style="background: #f0fdf4; color: #166534; padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; border: 1px solid #dcfce7;">${s.trim()}</span>`).join('')
+                                                            : '<p style="font-size: 0.85rem; font-weight: 600; color: #64748b; margin: 0;">N/A</p>'
+                                                        }
+                                                    </div>
                                                 </div>
+                                            </div>
+                                            <div style="display: flex; gap: 8px; border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 16px;">
+                                                <button id="view-job-${pos.job_id || pos.id}" class="view-job-btn" style="background: white; color: var(--primary); border: 1px solid var(--border); padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;">View Full Details</button>
                                             </div>
                                         </div>
                                     `).join('')}
@@ -181,4 +189,12 @@ export async function render(container, app) {
             app.navigateTo('companies');
         });
     }
+
+    // Add job details listeners
+    container.querySelectorAll('.view-job-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const jobId = btn.id.replace('view-job-', '');
+            app.viewJob(jobId);
+        });
+    });
 }

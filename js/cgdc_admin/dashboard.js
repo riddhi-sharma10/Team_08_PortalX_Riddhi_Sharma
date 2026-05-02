@@ -175,10 +175,9 @@ function renderShell(container) {
                                     <label>
                                         <span>Status</span>
                                         <select id="dash-filter-status">
-                                            <option value="all">All Statuses</option>
+                                            <option value="all">All Status</option>
                                             <option value="placed">Placed</option>
                                             <option value="active">Active</option>
-                                            <option value="rejected">Rejected</option>
                                             <option value="opted_out">Opted Out</option>
                                             <option value="not_eligible">Not Eligible</option>
                                         </select>
@@ -610,7 +609,7 @@ function fmt(n) {
 
 function statusTag(s) {
   if (s === "placed") return "tag-success";
-  if (s === "active") return "tag-warning";
+  if (s === "active") return "tag-info";
   if (s === "rejected") return "tag-danger";
   if (s === "opted_out") return "tag-muted";
   if (s === "not_eligible") return "tag-danger";

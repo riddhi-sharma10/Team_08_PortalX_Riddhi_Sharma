@@ -114,16 +114,30 @@ export async function render(container, app) {
                         ${(company.positions && company.positions.length > 0) ? `
                             <div style="display: grid; gap: 16px;">
                                 ${company.positions.map((pos, idx) => `
-                                    <div style="padding: 24px; background: #f8fafc; border: 1px solid var(--border); border-radius: 16px; display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <h4 style="font-size: 1.15rem; font-weight: 800; color: var(--primary); margin-bottom: 4px;">${pos.title}</h4>
-                                            <div style="display: flex; gap: 12px; align-items: center; margin-top: 8px;">
-                                                <span style="font-weight: 800; color: var(--success);">₹${pos.salary} LPA</span>
-                                                <span style="color: var(--text-muted);">|</span>
-                                                <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">CGPA Requirement: <b>${pos.cgpa || '6.0'}</b></span>
+                                    <div style="padding: 18px; background: #f8fafc; border-radius: 14px; border: 1px solid #e2e8f0; border-left: 4px solid var(--primary); margin-bottom: 16px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                                            <div style="flex: 1;">
+                                                <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin: 0 0 6px 0;">${pos.title}</h4>
+                                                <p style="font-size: 0.85rem; color: #64748b; margin: 0; font-weight: 500;">Position ${idx + 1} of ${company.positions.length}</p>
+                                            </div>
+                                            <div style="background: #ffffff; color: var(--primary); width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.05rem; flex-shrink: 0; border: 1px solid #bfdbfe;">${idx + 1}</div>
+                                        </div>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                                            <div style="padding: 14px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                                <p style="font-size: 0.7rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin: 0 0 8px 0;">Salary Range</p>
+                                                <p style="font-size: 1rem; font-weight: 700; color: #10b981; margin: 0;">${pos.salary ? `₹${pos.salary} LPA` : 'N/A'}</p>
+                                            </div>
+                                            <div style="padding: 14px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                                <p style="font-size: 0.7rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin: 0 0 8px 0;">Required Skills</p>
+                                                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                                    ${pos.skills && pos.skills !== 'N/A'
+                                                        ? pos.skills.split(',').map(s => `<span style="background: #f0fdf4; color: #166534; padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; border: 1px solid #dcfce7;">${s.trim()}</span>`).join('')
+                                                        : '<p style="font-size: 0.85rem; font-weight: 600; color: #64748b; margin: 0;">N/A</p>'
+                                                    }
+                                                </div>
                                             </div>
                                         </div>
-                                        <div style="display: flex; gap: 8px;">
+                                        <div style="display: flex; gap: 8px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
                                             <button id="view-job-${pos.id}" class="btn-primary" style="background: white; color: var(--primary); border: 1px solid var(--border); padding: 10px 20px; border-radius: 10px; font-weight: 800; font-size: 0.9rem;">Details</button>
                                             ${(pos.status || '').toLowerCase() === 'closed'
                                                 ? `<button class="btn-primary" style="padding: 10px 24px; border-radius: 10px; font-weight: 800; font-size: 0.9rem; background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; cursor: not-allowed;" disabled>Closed</button>`

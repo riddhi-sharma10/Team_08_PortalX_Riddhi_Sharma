@@ -92,8 +92,7 @@ router.get('/dashboard', async (req, res) => {
                     WHEN s.profile_status = 'opted_out' THEN 'opted_out'
                     WHEN s.profile_status = 'not_eligible' THEN 'not_eligible'
                     WHEN best_pr.record_id IS NOT NULL THEN 'placed'
-                    WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'active'
-                    WHEN latest_app.status = 'rejected' THEN 'rejected'
+                    WHEN latest_app.status = 'selected' THEN 'placed'
                     ELSE 'active'
                 END AS status,
                 s.graduation_yr AS graduation_yr
@@ -188,8 +187,7 @@ router.get('/users', async (req, res) => {
                          WHEN s.profile_status = 'opted_out' THEN 'opted_out'
                          WHEN s.profile_status = 'not_eligible' THEN 'not_eligible'
                          WHEN s.profile_status = 'placed' OR best_pr.record_id IS NOT NULL THEN 'placed'
-                         WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'active'
-                         WHEN latest_app.status = 'rejected' THEN 'rejected'
+                         WHEN latest_app.status = 'selected' THEN 'placed'
                          WHEN s.profile_status = 'active' THEN 'active'
                          ELSE 'active'
                     END AS status,
@@ -315,8 +313,6 @@ router.get('/records', async (req, res) => {
                     WHEN s.profile_status = 'not_eligible' THEN 'Not Eligible'
                     WHEN best_pr.record_id IS NOT NULL THEN 'Placed'
                     WHEN latest_app.status = 'selected' THEN 'Placed'
-                    WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'Active'
-                    WHEN latest_app.status = 'rejected' THEN 'Rejected'
                     ELSE 'Active'
                 END AS status,
                 s.graduation_yr AS appliedYear
@@ -589,7 +585,7 @@ router.get('/company/:id', async (req, res) => {
 
         const [jobs] = await pool.query(`
             SELECT j.job_id, j.role AS title, j.package,
-                   COALESCE(j.job_description,'') AS description
+                   (SELECT GROUP_CONCAT(skill_name SEPARATOR ', ') FROM JOB_REQUIRED_SKILL WHERE job_id = j.job_id) AS description
             FROM JOB_PROFILE j WHERE j.comp_id = ?
         `, [compId]);
 
@@ -604,14 +600,51 @@ router.get('/company/:id', async (req, res) => {
             activeJobs: jobs.length,
             placements: Number(placementCount[0]?.count || 0),
             positions: jobs.map((j) => ({
+                id: j.job_id,
                 title: j.title || 'N/A',
                 salary: j.package ? `${j.package} LPA` : 'N/A',
-                skills: j.job_description || 'N/A'
+                skills: j.description || 'N/A'
             }))
         });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Error fetching company details' });
+    }
+});
+
+// --- Student Profile for Admin ---
+router.get('/student/:id/profile', async (req, res) => {
+    try {
+        const studentId = req.params.id;
+        
+        // Fetch student profile details
+        const [studentRows] = await pool.query(`
+            SELECT s.*, pc.name as coordinator_name, pc.email as coordinator_email 
+            FROM STUDENT s
+            LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            WHERE s.s_id = ?
+        `, [studentId]);
+
+        if (studentRows.length === 0) return res.status(404).json({ message: 'Student not found' });
+        const student = studentRows[0];
+
+        // Fetch applications for this student
+        const [applications] = await pool.query(`
+            SELECT a.*, j.role, c.comp_name, c.industry_type
+            FROM APPLICATION a
+            JOIN JOB_PROFILE j ON a.job_id = j.job_id
+            JOIN COMPANY c ON j.comp_id = c.comp_id
+            WHERE a.s_id = ?
+            ORDER BY a.applied_date DESC
+        `, [studentId]);
+
+        res.json({
+            profile: student,
+            applications: applications
+        });
+    } catch (err) {
+        console.error('Admin Student Profile Error:', err);
+        res.status(500).json({ message: 'Error fetching student profile' });
     }
 });
 
@@ -906,8 +939,8 @@ function normalizeStatus(status) {
     if (['selected', 'placed', 'accepted'].includes(value)) return 'placed';
     if (['under_review', 'shortlisted', 'in-progress', 'in_progress', 'applied', 'active'].includes(value)) return 'active';
     if (value === 'rejected') return 'rejected';
-    if (value === 'opted_out') return 'opted_out';
-    if (value === 'not_eligible') return 'not_eligible';
+    if (value === 'opted_out' || value === 'opted out') return 'opted_out';
+    if (value === 'not_eligible' || value === 'not eligible') return 'not_eligible';
     return 'active';
 }
 function capitalize(text) { return String(text || '').charAt(0).toUpperCase() + String(text || '').slice(1); }

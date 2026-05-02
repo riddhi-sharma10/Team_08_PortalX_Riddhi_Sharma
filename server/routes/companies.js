@@ -50,13 +50,14 @@ router.get('/:id', requireAuth, async (req, res) => {
         // Fetch associated open jobs (be case insensitive with status)
         const [jobs] = await pool.query(`
             SELECT 
-                job_id as id, 
-                role as title, 
-                package as salary, 
-                eligibility_cgpa as cgpa,
-                status
-            FROM JOB_PROFILE 
-            WHERE comp_id = ?
+                j.job_id as id, 
+                j.role as title, 
+                j.package as salary, 
+                j.eligibility_cgpa as cgpa,
+                (SELECT GROUP_CONCAT(skill_name SEPARATOR ', ') FROM JOB_REQUIRED_SKILL WHERE job_id = j.job_id) as skills,
+                j.status
+            FROM JOB_PROFILE j
+            WHERE j.comp_id = ?
         `, [id]);
 
         company.positions = jobs;

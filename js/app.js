@@ -100,6 +100,8 @@ const App = {
         const token = localStorage.getItem('placement_token');
         if (savedUser && token) {
             this.state.user = JSON.parse(savedUser);
+            // Normalize role naming
+            if (this.state.user.role === 'cgdc_admin') this.state.user.role = 'admin';
             this.state.role = this.state.user.role;
             const savedPage = sessionStorage.getItem('current_page');
             if (savedPage) this.state.currentPage = savedPage;
@@ -190,6 +192,7 @@ const App = {
     logout() {
         localStorage.removeItem('placement_user');
         localStorage.removeItem('placement_token');
+        sessionStorage.clear(); // Clear current page and other session state
         this.state.user = null;
         this.state.role = null;
         window.location.reload();
