@@ -47,8 +47,11 @@ export async function render(container, app) {
                 <button class="admin-users-tab" data-view="Admin" type="button">Admin</button>
             </div>
 
-            <div class="admin-users-header">
+            <div class="admin-users-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <h1>User Directory</h1>
+                <button id="user-add-student-btn" class="btn-primary" type="button" style="padding: 10px 20px; border-radius: 6px; font-weight: 600;">
+                    <ion-icon name="add-outline"></ion-icon> Add Student
+                </button>
             </div>
 
             <div class="admin-users-kpis">
@@ -160,10 +163,84 @@ export async function render(container, app) {
                 </div>
             </div>
         </div>
+
+        <!-- Add Student Modal -->
+        <div id="addStudentModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 1000; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(6px);">
+            <div style="background: white; border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,0.22); width: 100%; max-width: 700px; max-height: 92vh; overflow-y: auto; border: 1px solid #dbe4f0;">
+                <div style="padding: 24px 28px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; background: linear-gradient(180deg, #ffffff, #f8fbff); position: sticky; top: 0; z-index: 1;">
+                    <div>
+                        <p style="margin: 0 0 6px 0; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">New Record</p>
+                        <h2 style="font-size: 1.65rem; color: var(--primary); margin: 0;">Add New Student</h2>
+                    </div>
+                    <button id="closeStudentModalBtn" type="button" style="background: #eff6ff; border: 1px solid #bfdbfe; font-size: 1.35rem; color: var(--primary); cursor: pointer; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 700;">×</button>
+                </div>
+
+                <form id="studentForm" style="display: grid; gap: 18px; padding: 24px 28px 28px;">
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Student Name *</label>
+                            <input type="text" id="studentName" required style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                        </div>
+
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Email Address *</label>
+                            <input type="email" id="studentEmail" required style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                        </div>
+
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Phone Number</label>
+                            <input type="text" id="studentPhone" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                        </div>
+
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Date of Birth</label>
+                            <input type="date" id="studentDob" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                        </div>
+
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Department *</label>
+                            <select id="studentDept" required style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                                <option value="">Select Department</option>
+                                <option value="Computer Science">Computer Science</option>
+                                <option value="IT">IT</option>
+                                <option value="Electronics">Electronics</option>
+                                <option value="Mechanical">Mechanical</option>
+                                <option value="Civil">Civil</option>
+                            </select>
+                        </div>
+
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Graduation Year *</label>
+                            <input type="number" id="studentGradYear" required min="2000" max="2100" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                        </div>
+
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">CGPA</label>
+                            <input type="number" id="studentCgpa" step="0.01" min="0" max="10" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                        </div>
+
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Profile Status</label>
+                            <select id="studentProfileStatus" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                                <option value="active">Active</option>
+                                <option value="not_eligible">Not Eligible</option>
+                                <option value="opted_out">Opted Out</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="button" id="cancelStudentBtn" style="flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--text-main); font-weight: 600; cursor: pointer;">Cancel</button>
+                        <button type="submit" id="submitStudentBtn" style="flex: 1; padding: 12px 16px; border: none; border-radius: 8px; background: var(--primary); color: white; font-weight: 600; cursor: pointer;">Add Student</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     `;
 
     hydrateKpis();
     bindEvents();
+    bindStudentModalEvents(container, app);
     configureFiltersForRole();
     renderTable();
 }
@@ -236,6 +313,78 @@ function bindEvents() {
         }
     });
 
+}
+
+function bindStudentModalEvents(container, app) {
+    const modal = document.getElementById('addStudentModal');
+    const openBtn = document.getElementById('user-add-student-btn');
+    const closeBtn = document.getElementById('closeStudentModalBtn');
+    const cancelBtn = document.getElementById('cancelStudentBtn');
+    const form = document.getElementById('studentForm');
+
+    function openModal() {
+        if (modal) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeModal() {
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            if (form) form.reset();
+        }
+    }
+
+    if (openBtn) openBtn.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitStudentBtn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Saving...';
+            }
+
+            const payload = {
+                name: document.getElementById('studentName').value.trim(),
+                email: document.getElementById('studentEmail').value.trim(),
+                phone: document.getElementById('studentPhone').value.trim(),
+                dob: document.getElementById('studentDob').value || null,
+                dept: document.getElementById('studentDept').value,
+                graduation_yr: document.getElementById('studentGradYear').value,
+                cgpa: document.getElementById('studentCgpa').value || null,
+                profile_status: document.getElementById('studentProfileStatus').value
+            };
+
+            try {
+                await api.post('/admin/student', payload);
+                alert('Student added successfully!');
+                closeModal();
+                // Re-render user directory to show the new student
+                render(container, app);
+            } catch (err) {
+                console.error(err);
+                alert('Error adding student: ' + err.message);
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Add Student';
+                }
+            }
+        });
+    }
 }
 
 function renderTable() {

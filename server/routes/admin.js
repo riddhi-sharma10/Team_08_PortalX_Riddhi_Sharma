@@ -524,6 +524,48 @@ router.get('/profile', async (req, res) => {
     }
 });
 
+router.post('/student', async (req, res) => {
+    try {
+        const { name, email, phone, dob, dept, graduation_yr, cgpa, profile_status } = req.body;
+
+        if (!name || !email || !dept || !graduation_yr) {
+            return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        const [result] = await pool.query(`
+            INSERT INTO STUDENT (s_name, email, phone, date_of_birth, dept, graduation_yr, cgpa, profile_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            name,
+            email,
+            phone || null,
+            dob || null,
+            dept,
+            Number(graduation_yr),
+            cgpa ? Number(cgpa) : null,
+            profile_status || 'active'
+        ]);
+
+        const newStudentId = result.insertId;
+
+        // Automatically create a user account for the student
+        const username = email.split('@')[0];
+        // Hash password should be done here in real app, we use a simple default for mock
+        await pool.query(`
+            INSERT INTO USER_ROLE (username, password, role, entity_id)
+            VALUES (?, ?, 'student', ?)
+        `, [username, 'student123', newStudentId]);
+
+        res.status(201).json({ message: 'Student created successfully', studentId: newStudentId });
+    } catch (err) {
+        console.error('Error creating student:', err);
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ message: 'Email already exists' });
+        }
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 function normalizeStatus(status) { const value = String(status || '').toLowerCase(); if (['selected', 'placed', 'accepted'].includes(value)) return 'placed'; if (['under_review', 'shortlisted'].includes(value)) return 'in-progress'; if (value === 'rejected') return 'rejected'; return 'in-progress'; }
 function capitalize(text) { return String(text || '').charAt(0).toUpperCase() + String(text || '').slice(1); }
 
