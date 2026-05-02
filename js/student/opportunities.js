@@ -10,7 +10,21 @@ export async function render(container, app) {
 
     try {
         allJobs = await api.get('/jobs');
-        filteredJobs = [...allJobs];
+        
+        // Check for pending search from global search bar
+        const pendingSearch = sessionStorage.getItem('pendingSearch');
+        if (pendingSearch) {
+            searchQuery = pendingSearch;
+            sessionStorage.removeItem('pendingSearch');
+        }
+
+        filteredJobs = searchQuery 
+            ? allJobs.filter(j => 
+                j.role.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                j.comp_name.toLowerCase().includes(searchQuery.toLowerCase())
+              )
+            : [...allJobs];
+            
         renderPage(container);
     } catch (err) {
         container.innerHTML = `<div class="card" style="padding:24px; color:#ef4444;">Database Sync Error: ${err.message}</div>`;
@@ -76,5 +90,13 @@ function renderPage(container) {
             );
             renderPage(container);
         });
+    }
+}
+export function search(query) {
+    searchQuery = query;
+    const searchInput = document.getElementById('job-search');
+    if (searchInput) {
+        searchInput.value = query;
+        searchInput.dispatchEvent(new Event('input'));
     }
 }

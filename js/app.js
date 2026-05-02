@@ -72,6 +72,7 @@ const App = {
             const module = await import(/* @vite-ignore */ modulePath);
             
             if (module && module.render) {
+                this.currentModule = module;
                 pageContent.innerHTML = '';
                 module.render(pageContent, this);
                 resetScroll();
