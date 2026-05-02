@@ -50,9 +50,6 @@ const App = {
             sidebar.style.width = newWidth + 'px';
             document.documentElement.style.setProperty('--sidebar-width', newWidth + 'px');
             localStorage.setItem(STORAGE_KEY, newWidth);
-
-            // Trigger window resize to force responsive elements (like Charts) to update
-            window.dispatchEvent(new Event('resize'));
         });
 
         window.addEventListener('mouseup', () => {
@@ -61,6 +58,9 @@ const App = {
                 document.body.style.cursor = 'default';
                 resizer.classList.remove('resizing');
                 document.body.style.userSelect = 'auto';
+                
+                // Trigger window resize ONLY once after resizing is finished
+                window.dispatchEvent(new Event('resize'));
             }
         });
     },
@@ -156,6 +156,13 @@ const App = {
         sessionStorage.setItem('selectedCompany', companyName);
         // Navigate to company view
         this.navigateTo('company_view');
+    },
+
+    viewJob(jobId) {
+        // Store the selected job in session storage
+        sessionStorage.setItem('selectedJobId', jobId);
+        // Navigate to job view
+        this.navigateTo('job_view');
     },
 
     handleGlobalSearch(query) {

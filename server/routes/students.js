@@ -30,4 +30,22 @@ router.get('/profile', requireAuth, async (req, res) => {
     }
 });
 
+// Update profile (Resume URL etc.)
+router.put('/profile', requireAuth, async (req, res) => {
+    if (req.user.role !== 'student') return res.status(403).json({ message: 'Access denied' });
+
+    const { resume_url, phone } = req.body;
+
+    try {
+        await pool.query(
+            'UPDATE STUDENT SET resume_url = ?, phone = ? WHERE s_id = ?',
+            [resume_url, phone, req.user.entityId]
+        );
+        res.json({ message: 'Profile updated successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error updating profile' });
+    }
+});
+
 export default router;

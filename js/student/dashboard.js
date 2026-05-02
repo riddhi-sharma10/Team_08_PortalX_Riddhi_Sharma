@@ -104,16 +104,22 @@ function renderDashboard(container, app, applications, jobs) {
                     <!-- Recommended Opportunities -->
                     <div class="card" style="padding: 24px;">
                          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                            <h3 style="font-weight: 800; color: var(--text-main);">Hot Opportunities</h3>
+                            <h3 style="font-weight: 800; color: var(--text-main);">All Job Opportunities (${jobs.length})</h3>
+                            <button id="btn-view-all-jobs" style="color: var(--primary); font-weight: 700; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.9rem;">
+                                View All <ion-icon name="arrow-forward-outline"></ion-icon>
+                            </button>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            ${jobs.slice(0, 4).map(job => `
+                            ${jobs.map(job => `
                                 <div style="padding: 16px; border-radius: 14px; background: #f8fafc; border: 1px solid var(--border); position: relative;">
                                     <h4 style="margin: 0; font-weight: 700;">${job.role}</h4>
                                     <p style="margin: 4px 0 8px; font-size: 0.9rem; font-weight: 600; color: var(--primary);">${job.comp_name}</p>
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
                                         <span style="font-weight: 800; color: var(--success);">₹${job.package} LPA</span>
-                                        <button onclick="window.navTo('opportunities')" style="background: white; border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Details</button>
+                                        ${(job.status || '').toLowerCase() === 'closed'
+                                            ? `<button style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: not-allowed;" disabled>Closed</button>`
+                                            : `<button id="view-job-${job.job_id}" style="background: white; border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Details</button>`
+                                        }
                                     </div>
                                 </div>
                             `).join('')}
@@ -160,6 +166,25 @@ function renderDashboard(container, app, applications, jobs) {
             app.navigateTo('applications');
         });
     }
+
+    // Add navigation listener for view all jobs
+    const viewAllJobsBtn = document.getElementById('btn-view-all-jobs');
+    if (viewAllJobsBtn) {
+        viewAllJobsBtn.addEventListener('click', () => {
+            app.navigateTo('opportunities');
+        });
+    }
+
+    // Add job details listeners for all jobs
+    jobs.forEach(job => {
+        const btn = document.getElementById(`view-job-${job.job_id}`);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                sessionStorage.setItem('job_view_origin', 'dashboard');
+                app.viewJob(job.job_id);
+            });
+        }
+    });
 }
 
 function renderTimelineStep({ title, desc, status, icon }) {

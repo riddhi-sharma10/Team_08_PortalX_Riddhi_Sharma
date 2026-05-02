@@ -179,10 +179,15 @@ function renderShell(container, app) {
                     </div>
                     <div style="background: #f8fafc; padding: 24px; border-radius: 12px; border: 2px dashed var(--border); text-align: center;">
                         <p style="color: var(--text-muted); margin-bottom: 16px; font-size: 0.9rem;">Your verified placement resume on record</p>
-                        <a href="${s.resume_url || '#'}" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; text-decoration: none; border-radius: 12px;">
-                            <ion-icon name="document-text-outline"></ion-icon>
-                            View Verified Resume
-                        </a>
+                        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+                            <a href="${s.resume_url || '#'}" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; text-decoration: none; border-radius: 12px; width: fit-content;">
+                                <ion-icon name="document-text-outline"></ion-icon>
+                                View Verified Resume
+                            </a>
+                            <button id="update-resume-btn" style="background: white; color: var(--primary); border: 1px solid var(--primary); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+                                <ion-icon name="cloud-upload-outline"></ion-icon> Update Resume Link
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -233,4 +238,32 @@ function renderShell(container, app) {
             </div>
         </div>
     `;
+
+    // Add event listeners
+    const updateBtn = document.getElementById('update-resume-btn');
+    if (updateBtn) {
+        updateBtn.addEventListener('click', async () => {
+            const newUrl = prompt('Enter the link to your updated resume (e.g., Google Drive or LinkedIn link):', studentProfile.resume_url || '');
+            if (newUrl && newUrl !== studentProfile.resume_url) {
+                try {
+                    updateBtn.innerHTML = '<ion-icon name="sync-outline" class="spin"></ion-icon> Updating...';
+                    updateBtn.disabled = true;
+                    
+                    await api.put('/students/profile', { 
+                        resume_url: newUrl,
+                        phone: studentProfile.phone // Keep existing phone
+                    });
+                    
+                    alert('Resume updated successfully!');
+                    // Refresh profile data
+                    studentProfile = await api.get('/students/profile');
+                    renderShell(container, app);
+                } catch (err) {
+                    alert('Update failed: ' + err.message);
+                    updateBtn.innerHTML = '<ion-icon name="cloud-upload-outline"></ion-icon> Update Resume Link';
+                    updateBtn.disabled = false;
+                }
+            }
+        });
+    }
 }
