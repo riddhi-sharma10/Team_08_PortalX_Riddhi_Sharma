@@ -58,32 +58,19 @@ router.get('/history', requireAuth, async (req, res) => {
     try {
         const [rows] = await pool.query(`
             SELECT 
-                vh.academic_year as year,
-                COALESCE(pr.stream, 'General') as dept,
-                c.comp_name,
-                COALESCE(j.role, 'N/A') as role,
-                COUNT(pr.record_id) as placed,
-                COALESCE(MAX(pr.salary_offered), 0) as highest,
-                COALESCE(AVG(pr.salary_offered), 0) as average
+                vh.academic_year AS year,
+                vh.comp_id AS comp_id,
+                c.comp_name AS comp_name,
+                vh.students_placed AS placed,
+                vh.highest_salary AS highest,
+                vh.avg_salary AS average,
+                vh.lowest_salary AS lowest
             FROM COMPANY_VISIT_HISTORY vh
             JOIN COMPANY c ON vh.comp_id = c.comp_id
-            LEFT JOIN PLACEMENT_RECORD pr ON vh.comp_id = pr.comp_id AND vh.academic_year = pr.academic_year
-            LEFT JOIN JOB_PROFILE j ON pr.job_id = j.job_id
-            GROUP BY vh.academic_year, dept, c.comp_name, role
             ORDER BY vh.academic_year DESC, c.comp_name ASC
         `);
         
-        const transformed = rows.map(r => ({
-            year: r.year.toString(),
-            dept: r.dept,
-            comp_name: r.comp_name,
-            role: r.role,
-            placed: r.placed,
-            highest: r.highest > 0 ? `₹${Number(r.highest).toFixed(2)} LPA` : 'N/A',
-            average: r.average > 0 ? `₹${Number(r.average).toFixed(2)} LPA` : 'N/A'
-        }));
-
-        res.json(transformed);
+        res.json(rows);
     } catch (err) {
         console.error('History Sync Error:', err);
         res.status(500).json({ message: 'Error fetching placement history' });

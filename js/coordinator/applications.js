@@ -107,12 +107,15 @@ function appRows() {
             <td style="padding: 16px; text-align: center;">
                 ${a.studentProfileStatus === 'opted_out'
                     ? `<span class="tag" style="background: #e2e8f0; color: #64748b; font-weight: 800; min-width: 150px; display: inline-block; padding: 6px 12px; border-radius: 8px;">OPTED OUT</span>`
-                    : `<select class="status-updater" data-id="${a.id}" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; color: var(--text-main); outline: none; cursor: pointer; background: #f8fafc; min-width: 150px;">
-                        <option value="under_review" ${a.status === 'under_review' ? 'selected' : ''}>UNDER REVIEW</option>
-                        <option value="shortlisted"  ${a.status === 'shortlisted' ? 'selected' : ''}>SHORTLISTED</option>
-                        <option value="selected"     ${a.status === 'selected' ? 'selected' : ''}>SELECTED</option>
-                        <option value="rejected"     ${a.status === 'rejected' ? 'selected' : ''}>REJECTED</option>
-                    </select>`
+                    : (a.studentProfileStatus === 'placed'
+                        ? `<span class="tag tag-success" style="font-weight: 800; min-width: 150px; display: inline-block; padding: 6px 12px; border-radius: 8px; text-transform: uppercase;">Placed</span>`
+                        : `<select class="status-updater" data-id="${a.id}" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; color: var(--text-main); outline: none; cursor: pointer; background: #f8fafc; min-width: 150px;">
+                            <option value="under_review" ${a.status === 'under_review' ? 'selected' : ''}>UNDER REVIEW</option>
+                            <option value="shortlisted"  ${a.status === 'shortlisted' ? 'selected' : ''}>SHORTLISTED</option>
+                            <option value="selected"     ${a.status === 'selected' ? 'selected' : ''}>SELECTED</option>
+                            <option value="rejected"     ${a.status === 'rejected' ? 'selected' : ''}>REJECTED</option>
+                        </select>`
+                    )
                 }
             </td>
             <td style="padding: 16px; text-align: center;">

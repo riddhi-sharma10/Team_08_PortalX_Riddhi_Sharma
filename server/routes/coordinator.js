@@ -21,7 +21,8 @@ router.get('/dashboard', async (req, res) => {
         console.log(`[Coordinator API] Fetching dashboard for ID: ${id}`);
 
         const [students] = await pool.query('SELECT COUNT(*) AS total FROM STUDENT WHERE coord_id = ?', [id]);
-        const [offers] = await pool.query(`SELECT COUNT(DISTINCT o.s_id) AS placed FROM OFFER o INNER JOIN STUDENT s ON o.s_id = s.s_id WHERE s.coord_id = ? AND LOWER(o.offer_status) = 'accepted'`, [id]);
+        const [placedCount] = await pool.query("SELECT COUNT(*) AS total FROM STUDENT WHERE coord_id = ? AND profile_status = 'placed'", [id]);
+        const [optedOutCount] = await pool.query("SELECT COUNT(*) AS total FROM STUDENT WHERE coord_id = ? AND profile_status = 'opted_out'", [id]);
         const [apps] = await pool.query(`SELECT COUNT(*) AS total FROM APPLICATION a INNER JOIN STUDENT s ON a.s_id = s.s_id WHERE s.coord_id = ?`, [id]);
         const [ints] = await pool.query(`SELECT COUNT(*) AS total FROM INTERVIEW i INNER JOIN STUDENT s ON i.s_id = s.s_id WHERE s.coord_id = ? AND i.interview_date >= CURDATE()`, [id]);
 
@@ -38,15 +39,18 @@ router.get('/dashboard', async (req, res) => {
             LIMIT 5
         `, [id]);
 
-        console.log(`[Coordinator API] ID ${id}: Found ${students[0]?.total} students and ${rows.length} chart rows.`);
-
         const tStudents = Number(students[0]?.total || 0);
-        const tPlaced = Number(offers[0]?.placed || 0);
+        const tPlaced = Number(placedCount[0]?.total || 0);
+        const tOptedOut = Number(optedOutCount[0]?.total || 0);
+        const tActive = Math.max(0, tStudents - tPlaced - tOptedOut);
+        
         const placementRate = tStudents > 0 ? ((tPlaced / tStudents) * 100).toFixed(1) : '0.0';
 
         res.json({
             totalStudents: tStudents,
             totalPlaced: tPlaced,
+            totalOptedOut: tOptedOut,
+            totalActive: tActive,
             placementRate,
             totalApplications: Number(apps[0]?.total || 0),
             upcomingInterviews: Number(ints[0]?.total || 0),

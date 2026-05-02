@@ -41,9 +41,9 @@ function renderShell(container, coordName, dept, stats) {
             </div>
 
             <div class="admin-stat-grid">
-                ${statCard("people-circle-outline", "My Students", stats.totalStudents, "Assigned to you", false)}
+                ${statCard("people-circle-outline", "Total Students", stats.totalStudents, "Assigned to you", false)}
                 ${statCard("checkmark-done-circle-outline", "Placed", stats.totalPlaced, stats.placementRate + "% rate", true)}
-                ${statCard("document-text-outline", "Applications", stats.totalApplications, "Total submitted", false)}
+                ${statCard("pulse-outline", "Currently Active", stats.totalActive, "Seeking placement", false)}
                 ${statCard("calendar-outline", "Upcoming Interviews", stats.upcomingInterviews, "Scheduled ahead", false)}
             </div>
 
