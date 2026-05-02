@@ -12,6 +12,10 @@ const recordsState = {
     selectedYear: 'all'
 };
 
+function saveRecordsState() {
+    // No-op - persistence disabled
+}
+
 async function fetchRecords(container) {
     if (container) {
         container.innerHTML = `
@@ -251,30 +255,40 @@ function renderPage(container, app) {
 }
 
 function bindInteractions(container, app) {
-    container.querySelector('#records-year-filter')?.addEventListener('change', async (event) => {
-        recordsState.selectedYear = event.target.value;
+    const yearFilter = container.querySelector('#records-year-filter');
+    const queryInput = container.querySelector('#admin-record-search');
+    const statusFilter = container.querySelector('#admin-record-status-filter');
+    const deptFilter = container.querySelector('#admin-record-dept-filter');
+
+    yearFilter?.addEventListener('change', async (e) => {
+        recordsState.selectedYear = e.target.value;
+        saveRecordsState();
         await fetchRecords(container);
         renderPage(container, app);
     });
 
-    container.querySelector('#admin-record-search')?.addEventListener('input', (event) => {
-        recordsState.query = event.target.value;
-        updateTableOnly();
-    });
-
-    container.querySelector('#admin-record-status-filter')?.addEventListener('change', (event) => {
-        recordsState.status = event.target.value;
+    queryInput?.addEventListener('input', (e) => {
+        recordsState.query = e.target.value.toLowerCase().trim();
+        saveRecordsState();
         renderPage(container, app);
     });
 
-    container.querySelector('#admin-record-dept-filter')?.addEventListener('change', (event) => {
-        recordsState.department = event.target.value;
+    statusFilter?.addEventListener('change', (e) => {
+        recordsState.status = e.target.value;
+        saveRecordsState();
+        renderPage(container, app);
+    });
+
+    deptFilter?.addEventListener('change', (e) => {
+        recordsState.department = e.target.value;
+        saveRecordsState();
         renderPage(container, app);
     });
 
     container.querySelectorAll('.admin-record-chip').forEach((button) => {
         button.addEventListener('click', () => {
             recordsState.status = button.dataset.status;
+            saveRecordsState();
             renderPage(container, app);
         });
     });

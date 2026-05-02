@@ -82,6 +82,27 @@ router.post('/', requireAuth, async (req, res) => {
             [student_id, job_id]
         );
 
+        // --- REAL-TIME NOTIFICATION: Notify coordinator about new application ---
+        try {
+            const [stuInfo] = await pool.query(
+                `SELECT s.s_name, s.coord_id, pc.email AS coord_email, j.role, c.comp_name
+                 FROM STUDENT s
+                 LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+                 JOIN JOB_PROFILE j ON j.job_id = ?
+                 JOIN COMPANY c ON c.comp_id = j.comp_id
+                 WHERE s.s_id = ?`, [job_id, student_id]
+            );
+            if (stuInfo.length > 0 && stuInfo[0].coord_email) {
+                await pool.query(
+                    `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'coordinator', ?, ?, 'alert')`,
+                    [stuInfo[0].coord_email, 'New Application',
+                     `${stuInfo[0].s_name} applied for ${stuInfo[0].role} at ${stuInfo[0].comp_name}`]
+                );
+            }
+        } catch (notifErr) {
+            console.warn('[Notif] Failed to notify coordinator:', notifErr.message);
+        }
+
         res.json({ message: 'application submitted' });
     } catch (err) {
         console.error('SUBMIT_ERROR:', err);
@@ -218,6 +239,31 @@ router.post('/accept', requireAuth, async (req, res) => {
         }
 
         await conn.commit();
+
+        // --- NOTIFY ADMIN: Student has been placed ---
+        try {
+            const [placedInfo] = await pool.query(
+                `SELECT s.s_name, s.dept, j.role, c.comp_name, j.package
+                 FROM STUDENT s
+                 JOIN JOB_PROFILE j ON j.job_id = ?
+                 JOIN COMPANY c ON c.comp_id = j.comp_id
+                 WHERE s.s_id = ?`, [job_id, student_id]
+            );
+            if (placedInfo.length > 0) {
+                const d = placedInfo[0];
+                const [admins] = await pool.query('SELECT email FROM CGDC_ADMIN');
+                for (const admin of admins) {
+                    await pool.query(
+                        `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'admin', ?, ?, 'system')`,
+                        [admin.email, '🎉 Student Placed',
+                         `${d.s_name} (${d.dept}) accepted offer for ${d.role} at ${d.comp_name} — ${d.package} LPA`]
+                    );
+                }
+            }
+        } catch (nErr) {
+            console.warn('[Notif] Failed to notify admin on placement:', nErr.message);
+        }
+
         res.json({ message: 'Offer accepted successfully! You are now marked as PLACED.' });
     } catch (err) {
         await conn.rollback();

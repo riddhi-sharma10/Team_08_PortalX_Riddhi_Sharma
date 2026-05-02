@@ -266,20 +266,24 @@ function renderShell(container, app) {
                         await api.put('/coordinator/profile', { avatar_url: base64String });
 
                         coordProfile.avatar_url = base64String;
-                        document.getElementById('coord-avatar-img').src = base64String;
+                        const avatarImg = document.getElementById('coord-avatar-img');
+                        if (avatarImg) avatarImg.src = base64String;
 
                         const savedUser = JSON.parse(localStorage.getItem('placement_user') || '{}');
                         savedUser.avatar_url = base64String;
                         localStorage.setItem('placement_user', JSON.stringify(savedUser));
                         app.state.user = savedUser;
-                        if(app.Navbar) app.Navbar.render(app.state.user, app);
+                        if (app.Navbar) app.Navbar.updateAvatar(base64String);
                         
                         alert('Profile photo updated successfully!');
                     } catch (err) {
                         alert('Failed to upload photo: ' + err.message);
                     } finally {
-                        changePhotoBtn.disabled = false;
-                        changePhotoBtn.innerHTML = '<ion-icon name="camera" style="font-size: 1.2rem;"></ion-icon>';
+                        const btn = document.getElementById('change-photo-btn');
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = '<ion-icon name="camera" style="font-size: 1.2rem;"></ion-icon>';
+                        }
                     }
                 };
                 reader.readAsDataURL(file);

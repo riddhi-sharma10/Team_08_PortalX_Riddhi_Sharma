@@ -546,10 +546,10 @@ router.get('/profile', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [admins] = await pool.query(
-            'SELECT name, email FROM CGDC_ADMIN WHERE cgdc_id = ?',
+            'SELECT name, email, avatar_url FROM CGDC_ADMIN WHERE cgdc_id = ?',
             [id]
         );
-        const a = admins[0] || { name: req.user.username, email: 'admin@university.edu' };
+        const a = admins[0] || { name: req.user.username, email: 'admin@university.edu', avatar_url: null };
 
         const [coordRow] = await pool.query('SELECT COUNT(*) AS cnt FROM PLACEMENT_COORDINATOR');
         const [compRow] = await pool.query('SELECT COUNT(*) AS cnt FROM COMPANY');
@@ -558,6 +558,7 @@ router.get('/profile', async (req, res) => {
         res.json({
             name: a.name,
             email: a.email,
+            avatar_url: a.avatar_url,
             designation: 'Placement Cell Administrator',
             department: 'Training & Placement Office',
             totalCoordinators: Number(coordRow[0]?.cnt || 0),
@@ -567,6 +568,36 @@ router.get('/profile', async (req, res) => {
     } catch (err) {
         console.error('Admin Profile Error:', err);
         res.status(500).json({ message: 'Error loading admin profile' });
+    }
+});
+
+router.put('/profile', async (req, res) => {
+    try {
+        const id = req.user.entityId;
+        const { name, email, avatar_url } = req.body;
+        
+        let updates = [];
+        let params = [];
+
+        if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+        if (email !== undefined) { updates.push('email = ?'); params.push(email); }
+        if (avatar_url !== undefined) { updates.push('avatar_url = ?'); params.push(avatar_url); }
+
+        if (updates.length === 0) {
+            return res.json({ success: true, message: 'No changes provided' });
+        }
+
+        params.push(id);
+        const sql = `UPDATE CGDC_ADMIN SET ${updates.join(', ')} WHERE cgdc_id = ?`;
+        await pool.query(sql, params);
+
+        res.json({ success: true, message: 'Profile updated successfully' });
+    } catch (err) {
+        console.error('Admin Profile Update Error:', err);
+        res.status(500).json({ 
+            message: 'Error updating admin profile',
+            details: err.code === 'ER_BAD_NULL_ERROR' ? 'Required fields cannot be empty' : err.message
+        });
     }
 });
 
@@ -648,34 +679,49 @@ router.get('/student/:id/profile', async (req, res) => {
     }
 });
 
-// --- Admin Profile ---
-router.get('/profile', async (req, res) => {
+// --- Coordinator Profile for Admin ---
+router.get('/coordinator/:id/profile', async (req, res) => {
     try {
-        const id = req.user.entityId || 0;
-        const [admins] = await pool.query(
-            'SELECT name, email FROM CGDC_ADMIN WHERE cgdc_id = ?',
-            [id]
+        const coordId = req.params.id;
+        
+        // Fetch coordinator profile details
+        const [coordRows] = await pool.query(
+            'SELECT name, email, phone_no, dept, cgdc_id FROM PLACEMENT_COORDINATOR WHERE coord_id = ?',
+            [coordId]
         );
-        const a = admins[0] || { name: req.user.username, email: 'admin@university.edu' };
 
-        const [coordRow] = await pool.query('SELECT COUNT(*) AS cnt FROM PLACEMENT_COORDINATOR');
-        const [compRow] = await pool.query('SELECT COUNT(*) AS cnt FROM COMPANY');
-        const [studRow] = await pool.query('SELECT COUNT(*) AS cnt FROM STUDENT');
+        if (coordRows.length === 0) return res.status(404).json({ message: 'Coordinator not found' });
+        const coordinator = coordRows[0];
+
+        // Fetch students assigned to this coordinator
+        const [students] = await pool.query(`
+            SELECT s_id, s_name, email, dept, cgpa, profile_status
+            FROM STUDENT
+            WHERE coord_id = ?
+            ORDER BY s_name ASC
+        `, [coordId]);
+
+        // Calculate stats
+        const totalStudents = students.length;
+        const placedStudents = students.filter(s => String(s.profile_status).toLowerCase() === 'placed').length;
+        const placementRate = totalStudents > 0 ? ((placedStudents / totalStudents) * 100).toFixed(1) : '0.0';
 
         res.json({
-            name: a.name,
-            email: a.email,
-            designation: 'Placement Cell Administrator',
-            department: 'Training & Placement Office',
-            totalCoordinators: Number(coordRow[0]?.cnt || 0),
-            totalCompanies: Number(compRow[0]?.cnt || 0),
-            totalStudents: Number(studRow[0]?.cnt || 0),
+            profile: coordinator,
+            students: students,
+            stats: {
+                totalStudents,
+                placedStudents,
+                placementRate
+            }
         });
     } catch (err) {
-        console.error('Admin Profile Error:', err);
-        res.status(500).json({ message: 'Error loading admin profile' });
+        console.error('Admin Coordinator Profile Error:', err);
+        res.status(500).json({ message: 'Error fetching coordinator profile' });
     }
 });
+
+
 
 router.post('/student', async (req, res) => {
     const conn = await pool.getConnection();

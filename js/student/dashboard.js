@@ -212,9 +212,14 @@ function renderDashboard(container, app, applications, jobs, profile, interviews
                                         <div style="font-size: 0.8rem; color: #0369a1;">Placement Coordinator</div>
                                     </div>
                                 </div>
-                                <div style="font-size: 0.85rem; color: #0369a1; display: flex; align-items: center; gap: 6px;">
-                                    <ion-icon name="mail-outline"></ion-icon>
-                                    ${profile.coordinator_email}
+                                <div style="font-size: 0.85rem; color: #0369a1; display: flex; align-items: center; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <ion-icon name="mail-outline"></ion-icon>
+                                        ${profile.coordinator_email}
+                                    </div>
+                                    <button id="connect-mentor-btn" style="background: #0ea5e9; color: white; border: none; padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 10px rgba(14, 165, 233, 0.2);">
+                                        <ion-icon name="chatbubble-ellipses"></ion-icon> Connect
+                                    </button>
                                 </div>
                               `
                             : `
@@ -248,6 +253,13 @@ function renderDashboard(container, app, applications, jobs, profile, interviews
     }
 
     // Add navigation listener for view all jobs
+    const mentorBtn = document.getElementById('connect-mentor-btn');
+    if (mentorBtn) {
+        mentorBtn.addEventListener('click', () => {
+            sessionStorage.setItem('chat_target', JSON.stringify({ id: profile.coordinator_email, role: 'coordinator', name: profile.coordinator_name }));
+            app.navigateTo('messages');
+        });
+    }
     const viewAllJobsBtn = document.getElementById('btn-view-all-jobs');
     if (viewAllJobsBtn) {
         viewAllJobsBtn.addEventListener('click', () => {

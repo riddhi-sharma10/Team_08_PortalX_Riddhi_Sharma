@@ -351,8 +351,8 @@ function renderShell(container, app) {
                     localStorage.setItem('placement_user', JSON.stringify(savedUser));
                     app.state.user = savedUser;
 
-                    // Sync Navbar
-                    app.Navbar.render(app.state.user);
+                    // Sync Navbar avatar only (no full re-render)
+                    if (app.Navbar) app.Navbar.updateAvatar(base64String);
                     
                     alert('Profile photo uploaded and updated successfully!');
                 } catch (err) {

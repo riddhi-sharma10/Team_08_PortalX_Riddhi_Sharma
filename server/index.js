@@ -31,12 +31,11 @@ import jobsRouter from './routes/jobs.js';
 import adminRouter from './routes/admin.js';
 import resumesRouter from './routes/resumes.js';
 import coordinatorRouter from './routes/coordinator.js';
+import chatRouter from './routes/chat.js';
+import notificationsRouter from './routes/notifications.js';
 import queriesRouter from './routes/queries.js';
 
 // REGISTER ROUTES
-// Any request to /api/auth/* → goes to auth.js
-// Any request to /api/students/* → goes to students.js
-// etc.
 app.use('/api/auth', authRouter);
 app.use('/api/students', studentsRouter);
 app.use('/api/companies', companiesRouter);
@@ -48,9 +47,11 @@ app.use('/api/jobs', jobsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/resumes', resumesRouter);
 app.use('/api/coordinator', coordinatorRouter);
+app.use('/api/chat', chatRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use('/api/queries', queriesRouter);
 
-// Health check (open this in browser to test: http://localhost:3001/api/health)
+// Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend is running!' });
 });
@@ -58,7 +59,7 @@ app.get('/api/health', (req, res) => {
 // START SERVER
 const PORT = process.env.PORT || 3001;
 
-// Global Error Handler (Prevents "Unexpected token" HTML crashes)
+// Global Error Handler
 app.use((err, req, res, next) => {
     console.error('SERVER CRASH:', err);
     res.status(500).json({ 

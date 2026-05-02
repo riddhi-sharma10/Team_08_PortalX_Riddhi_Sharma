@@ -8,9 +8,9 @@ const router = express.Router();
 
 // Demo credentials (fallback when DB is unavailable)
 const DEMO_USERS = {
-    'student_1': { password: 'student@2024', role: 'student', name: 'John Doe', id: 1, entityId: 1 },
-    'coordinator_1': { password: 'coord@2024', role: 'coordinator', name: 'Dr. Smith', id: 2, entityId: 1 },
-    'admin_1': { password: 'admin@2024', role: 'cgdc_admin', name: 'Admin Panel', id: 3, entityId: 1 }
+    'student_1': { password: 'student@2024', role: 'student', name: 'John Doe', id: 1, entityId: 1, email: 'student1@university.edu' },
+    'coordinator_1': { password: 'coord@2024', role: 'coordinator', name: 'Dr. Smith', id: 2, entityId: 1, email: 'coord1@university.edu' },
+    'admin_1': { password: 'adm@2024', role: 'cgdc_admin', name: 'Kajal Aggarwal', id: 1, entityId: 1, email: 'admin@university.edu' }
 };
 
 router.post('/login', async (req, res) => {
@@ -35,14 +35,14 @@ router.post('/login', async (req, res) => {
             const demoUser = DEMO_USERS[username];
             if (demoUser.password === password) {
                 const token = jwt.sign(
-                    { id: demoUser.id, role: demoUser.role, entityId: demoUser.entityId },
+                    { id: demoUser.id, role: demoUser.role, entityId: demoUser.entityId, email: demoUser.email },
                     process.env.JWT_SECRET || 'fallback_key',
                     { expiresIn: '24h' }
                 );
                 console.log(`✅ Demo login: ${username}`);
                 return res.json({
                     token,
-                    user: { id: demoUser.id, name: demoUser.name, role: demoUser.role, entityId: demoUser.entityId }
+                    user: { id: demoUser.id, name: demoUser.name, role: demoUser.role, entityId: demoUser.entityId, email: demoUser.email }
                 });
             }
         }
@@ -63,27 +63,37 @@ router.post('/login', async (req, res) => {
         let displayName = user.username;
         try {
             if (user.role === 'student' && user.entity_id) {
-                const [details] = await pool.query('SELECT s_name, avatar_url FROM STUDENT WHERE s_id = ?', [user.entity_id]);
+                const [details] = await pool.query('SELECT s_name, email, avatar_url FROM STUDENT WHERE s_id = ?', [user.entity_id]);
                 if (details.length > 0) {
                     displayName = details[0].s_name;
+                    user.email = details[0].email;
                     user.avatar_url = details[0].avatar_url;
                 }
             } else if (user.role === 'coordinator' && user.entity_id) {
-                const [details] = await pool.query('SELECT name, avatar_url FROM PLACEMENT_COORDINATOR WHERE coord_id = ?', [user.entity_id]);
+                const [details] = await pool.query('SELECT name, email, avatar_url FROM PLACEMENT_COORDINATOR WHERE coord_id = ?', [user.entity_id]);
                 if (details.length > 0) {
                     displayName = details[0].name;
+                    user.email = details[0].email;
                     user.avatar_url = details[0].avatar_url;
                 }
-            } else if (user.role === 'admin' && user.entity_id) {
-                const [details] = await pool.query('SELECT name, avatar_url FROM CGDC_ADMIN WHERE cgdc_id = ?', [user.entity_id]);
+            } else if ((user.role === 'admin' || user.role === 'cgdc_admin') && user.entity_id) {
+                console.log(`Resolving Admin Name for ID: ${user.entity_id}`);
+                const [details] = await pool.query('SELECT name, email, avatar_url FROM CGDC_ADMIN WHERE cgdc_id = ?', [user.entity_id]);
                 if (details.length > 0) {
                     displayName = details[0].name;
+                    user.email = details[0].email;
                     user.avatar_url = details[0].avatar_url;
+                    console.log(`Successfully resolved to: ${displayName}`);
+                } else {
+                    console.warn(`No details found in CGDC_ADMIN for ID: ${user.entity_id}`);
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error('Name resolution failed:', e.message);
+        }
+        const userEmail = user.email || (user.username + '@university.edu');
         const token = jwt.sign(
-            { id: user.user_id, role: user.role, entityId: user.entity_id },
+            { id: user.user_id, role: user.role, entityId: user.entity_id, email: userEmail },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
@@ -95,6 +105,7 @@ router.post('/login', async (req, res) => {
                 name: displayName,
                 role: user.role,
                 entityId: user.entity_id,
+                email: user.email || (user.username + '@university.edu'),
                 avatar_url: user.avatar_url
             }
         });

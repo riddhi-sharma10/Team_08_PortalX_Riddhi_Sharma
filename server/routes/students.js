@@ -42,16 +42,23 @@ router.put('/profile', requireAuth, async (req, res) => {
     if (req.user.role !== 'student') return res.status(403).json({ message: 'Access denied' });
 
     const { resume_url, phone, avatar_url } = req.body;
+    let updates = [];
+    let params = [];
 
+    if (resume_url !== undefined) { updates.push('resume_url = ?'); params.push(resume_url); }
+    if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
+    if (avatar_url !== undefined) { updates.push('avatar_url = ?'); params.push(avatar_url); }
+
+    if (updates.length === 0) return res.json({ message: 'No changes provided' });
+
+    params.push(req.user.entityId);
     try {
-        await pool.query(
-            'UPDATE STUDENT SET resume_url = ?, phone = ?, avatar_url = ? WHERE s_id = ?',
-            [resume_url, phone, avatar_url, req.user.entityId]
-        );
+        const sql = `UPDATE STUDENT SET ${updates.join(', ')} WHERE s_id = ?`;
+        await pool.query(sql, params);
         res.json({ message: 'Profile updated successfully' });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ message: 'Error updating profile' });
+        res.status(500).json({ message: 'Error updating profile', details: err.message });
     }
 });
 
@@ -80,6 +87,27 @@ router.post('/opt-out', requireAuth, async (req, res) => {
 
         await conn.query("UPDATE STUDENT SET profile_status = 'opted_out' WHERE s_id = ?", [student_id]);
         await conn.commit();
+
+        // --- NOTIFY ADMIN: Student opted out ---
+        try {
+            const [stuInfo] = await pool.query(
+                'SELECT s_name, dept, email FROM STUDENT WHERE s_id = ?', [student_id]
+            );
+            if (stuInfo.length > 0) {
+                const s = stuInfo[0];
+                const [admins] = await pool.query('SELECT email FROM CGDC_ADMIN');
+                for (const admin of admins) {
+                    await pool.query(
+                        `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'admin', ?, ?, 'alert')`,
+                        [admin.email, 'Student Opted Out',
+                         `${s.s_name} (${s.dept}) has opted out of the placement process.`]
+                    );
+                }
+            }
+        } catch (nErr) {
+            console.warn('[Notif] Failed to notify admin on opt-out:', nErr.message);
+        }
+
         res.json({ message: 'You have successfully opted out of the placement process.' });
     } catch (err) {
         if (conn) await conn.rollback();

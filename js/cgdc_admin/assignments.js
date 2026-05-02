@@ -6,6 +6,10 @@ let filteredAssignments = [];
 let coordinators = [];
 let activeCoordFilter = null;
 
+function saveAssignmentFilter() {
+    // No-op - persistence disabled
+}
+
 export async function render(container, app) {
     container.innerHTML = `
         <div class="admin-assignments-shell" style="padding: 24px; display: grid; gap: 24px; height: 100%; overflow-y: auto; animation: fadeIn 0.4s ease;">
@@ -144,15 +148,20 @@ function renderLoadList() {
 
     loadList.querySelectorAll('.coord-load-item').forEach(item => {
         item.addEventListener('click', () => {
-            const cid = parseInt(item.dataset.cid);
-            filterByCoordinator(cid);
+            const coordId = parseInt(item.dataset.cid);
+            activeCoordFilter = coordId;
+            filterByCoordinator(coordId);
         });
     });
 
     const clearBtn = document.getElementById('clear-coord-filter');
     if (clearBtn) {
-        clearBtn.style.display = activeCoordFilter ? 'block' : 'none';
-        clearBtn.onclick = () => filterByCoordinator(null);
+        clearBtn.style.display = activeCoordFilter !== null ? 'block' : 'none';
+        clearBtn.addEventListener('click', () => {
+            activeCoordFilter = null;
+            saveAssignmentFilter();
+            renderUI();
+        });
     }
 }
 

@@ -24,7 +24,7 @@ export const Sidebar = {
             admin: [
                 { id: 'dashboard', label: 'Dashboard', icon: 'grid-outline' },
                 { id: 'users', label: 'User Directory', icon: 'people-circle-outline' },
-                { id: 'assignments', label: 'Delegation Portal', icon: 'git-network-outline' },
+                { id: 'assignments', label: 'Delegation Portal', icon: 'git-pull-request-outline' },
                 { id: 'analytics', label: 'Reports & Analytics', icon: 'bar-chart-outline' },
                 { id: 'companies', label: 'Partner Companies', icon: 'business-outline' },
                 { id: 'records', label: 'Placement Records', icon: 'document-text-outline' },

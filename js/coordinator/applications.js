@@ -119,7 +119,8 @@ function appRows() {
                 }
             </td>
             <td style="padding: 16px; text-align: center;">
-                <button class="btn-primary details-btn" data-sid="${a.s_id || a.student_id || ''}" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700; display: block; margin: 0 auto ${a.status === 'selected' ? '6px' : '0'};">Details</button>
+                <button class="btn-primary details-btn" data-sid="${a.s_id || a.student_id || ''}" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700; display: block; margin: 0 auto 6px;">Details</button>
+                <button class="chat-btn" data-email="${a.studentEmail || ''}" data-name="${a.studentName || ''}" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700; background: #f0fdf4; border: 1px solid #16a34a; color: #16a34a; cursor: pointer; display: block; margin: 0 auto ${a.status === 'selected' ? '6px' : '0'}; transition: 0.2s;">Chat</button>
                 ${a.status === 'selected' ? `
                 <button class="schedule-btn" data-sid="${a.s_id || a.student_id || ''}" data-jobid="${a.job_id || ''}" data-name="${a.studentName || ''}" data-company="${a.company || ''}" style="padding: 6px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 700; background: white; border: 1px solid var(--primary); color: var(--primary); cursor: pointer; display: block; margin: 0 auto; transition: 0.2s;" onmouseover="this.style.background='var(--primary)'; this.style.color='white';" onmouseout="this.style.background='white'; this.style.color='var(--primary)';">Schedule</button>
                 ` : ''}
@@ -148,6 +149,8 @@ function wireEvents(container) {
         if (tb) tb.innerHTML = appRows();
         attachStatusEvents(container);
         attachDetailsEvents(container);
+        attachChatEvents(container);
+        attachScheduleEvents(container);
     });
 
     filterBtn?.addEventListener('click', (e) => {
@@ -163,6 +166,8 @@ function wireEvents(container) {
         if (tb) tb.innerHTML = appRows();
         attachStatusEvents(container);
         attachDetailsEvents(container);
+        attachChatEvents(container);
+        attachScheduleEvents(container);
     });
 
     document.addEventListener('click', e => {
@@ -173,6 +178,7 @@ function wireEvents(container) {
     attachStatusEvents(container);
     attachDetailsEvents(container);
     attachScheduleEvents(container);
+    attachChatEvents(container);
 }
 
 function attachScheduleEvents(container) {
@@ -183,6 +189,19 @@ function attachScheduleEvents(container) {
             const name = btn.getAttribute('data-name');
             const company = btn.getAttribute('data-company');
             showScheduleModal(sid, jid, name, company);
+        });
+    });
+}
+
+function attachChatEvents(container) {
+    container.querySelectorAll('.chat-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const email = btn.getAttribute('data-email');
+            const name = btn.getAttribute('data-name');
+            if (email) {
+                sessionStorage.setItem('chat_target', JSON.stringify({ id: email, role: 'student', name: name }));
+                window.App.navigateTo('messages');
+            }
         });
     });
 }

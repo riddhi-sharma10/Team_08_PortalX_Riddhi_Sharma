@@ -100,7 +100,7 @@ const App = {
         });
     },
 
-    checkAuth() {
+    async checkAuth() {
         const savedUser = localStorage.getItem('placement_user');
         const token = localStorage.getItem('placement_token');
         if (savedUser && token) {
@@ -108,6 +108,30 @@ const App = {
             // Normalize role naming
             if (this.state.user.role === 'cgdc_admin') this.state.user.role = 'admin';
             this.state.role = this.state.user.role;
+
+            // SYNC NAME FROM DB BEFORE RENDERING — ensures CGDC_ADMIN name is shown, not stale localStorage
+            try {
+                const rolePathMap = { admin: 'admin', coordinator: 'coordinator', student: 'students' };
+                const rolePath = rolePathMap[this.state.role] || 'students';
+                const resp = await fetch(`http://localhost:3001/api/${rolePath}/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (resp.ok) {
+                    const latest = await resp.json();
+                    // Admin → latest.name (from CGDC_ADMIN)
+                    // Coordinator → latest.name
+                    // Student → latest.s_name or latest.profile.s_name
+                    const freshName = latest.name || latest.s_name || latest.profile?.s_name || latest.profile?.name;
+                    const freshAvatar = latest.avatar_url || latest.profile?.avatar_url;
+                    if (freshName) this.state.user.name = freshName;
+                    if (freshAvatar) this.state.user.avatar_url = freshAvatar;
+                    localStorage.setItem('placement_user', JSON.stringify(this.state.user));
+                    console.log(`[App] Name synced from DB: ${this.state.user.name}`);
+                }
+            } catch (e) {
+                console.warn('[App] DB name sync failed (using cached):', e.message);
+            }
+
             const savedPage = sessionStorage.getItem('current_page');
             if (savedPage) this.state.currentPage = savedPage;
             this.showPortal();
@@ -170,7 +194,13 @@ const App = {
 
         // Dynamic Module Loading based on role
         try {
-            const modulePath = `./${roleFolder}/${pageId}.js`;
+            let modulePath = `./${roleFolder}/${pageId}.js`;
+            
+            // Handle common modules
+            if (['messages', 'settings'].includes(pageId)) {
+                modulePath = `./common/${pageId}.js`;
+            }
+
             const module = await import(/* @vite-ignore */ modulePath);
             
             if (module && module.render) {

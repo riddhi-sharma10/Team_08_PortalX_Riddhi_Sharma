@@ -60,9 +60,9 @@ export async function render(container, appOrRefresh = false) {
             </div>
 
             <div class="admin-users-tabs" role="tablist" aria-label="User directory views">
-                <button class="admin-users-tab active" data-view="Student" type="button">Student</button>
-                <button class="admin-users-tab" data-view="Coordinator" type="button">Coordinator</button>
-                <button class="admin-users-tab" data-view="Admin" type="button">Admin</button>
+                <button class="admin-users-tab ${state.filters.viewRole === 'Student' ? 'active' : ''}" data-view="Student" type="button">Student</button>
+                <button class="admin-users-tab ${state.filters.viewRole === 'Coordinator' ? 'active' : ''}" data-view="Coordinator" type="button">Coordinator</button>
+                <button class="admin-users-tab ${state.filters.viewRole === 'Admin' ? 'active' : ''}" data-view="Admin" type="button">Admin</button>
             </div>
 
             <div class="admin-users-header" style="display:flex; justify-content:space-between; align-items:center;">
@@ -386,9 +386,10 @@ function bindEvents() {
     document.querySelectorAll('.admin-users-tab').forEach((tab) => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.admin-users-tab').forEach((t) => t.classList.remove('active'));
-            tab.classList.add('active');
+            tab.classList.add('active');            
             state.filters.viewRole = tab.dataset.view;
-
+            // No longer saving to sessionStorage to ensure reset on return
+            
             updateAddButtonVisibility();
             resetFiltersForRoleSwitch();
             configureFiltersForRole();
@@ -419,6 +420,7 @@ function bindEvents() {
         state.filters.activity = getSelectValue('user-activity-filter');
         state.currentPage = 1;
         filterPanel?.classList.add('hidden');
+        saveFiltersToSession();
         renderTable();
     });
 
@@ -646,9 +648,16 @@ function bindModalEvents(container, app) {
         }
 
         try {
-            await api.delete(`/admin/${role}/${id}`);
+            const res = await api.delete(`/admin/${role}/${id}`);
             closeDeleteModal();
-            render(container, app);
+            
+            let successMsg = `${role.charAt(0).toUpperCase() + role.slice(1)} record has been successfully removed from the database.`;
+            if (role === 'coordinator') {
+                successMsg = `Coordinator record removed. All assigned students have been moved to the Delegation Portal for reassignment.`;
+            }
+            
+            await render(container, true);
+            showSuccess(successMsg);
         } catch (err) {
             console.error(err);
             alert(`Failed to delete ${role}`);
@@ -728,7 +737,16 @@ function renderTable() {
         btn.addEventListener('click', () => {
             const sid = btn.dataset.id;
             sessionStorage.setItem('selectedStudentId', sid);
+            sessionStorage.setItem('studentProfileOrigin', 'users'); // Set origin
             currentApp.navigateTo('student_profile');
+        });
+    });
+
+    tbody.querySelectorAll('.coord-profile-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const cid = btn.dataset.id;
+            sessionStorage.setItem('selectedCoordId', cid);
+            currentApp.navigateTo('coordinator_profile');
         });
     });
 
@@ -806,9 +824,12 @@ function renderRow(user, serial) {
                 </td>` : 
             (user.role.toLowerCase() === 'coordinator' ?
             `<td style="text-align: right;">
-                    <button class="user-delete-btn" data-role="${user.role.toLowerCase()}" data-id="${user.entityIdRaw}" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem; padding: 4px;">
-                        <ion-icon name="trash-outline"></ion-icon>
-                    </button>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button class="coord-profile-btn" data-id="${user.entityIdRaw}" style="background: #fff7ed; border: 1px solid #ffedd5; color: #ea580c; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;">View Profile</button>
+                        <button class="user-delete-btn" data-role="${user.role.toLowerCase()}" data-id="${user.entityIdRaw}" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem; padding: 4px;">
+                            <ion-icon name="trash-outline"></ion-icon>
+                        </button>
+                    </div>
                 </td>` : '<td></td>')
         }
         </tr>

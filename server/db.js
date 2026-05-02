@@ -19,7 +19,8 @@ const pool = mysql.createPool({
     keepAliveInitialDelay: 10000,
     ssl: {
         rejectUnauthorized: false
-    }
+    },
+    timezone: 'Z'
 });
 
 // Test the connection when server starts

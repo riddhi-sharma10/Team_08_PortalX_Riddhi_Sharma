@@ -1,4 +1,5 @@
 // js/coordinator/navbar.js
+import { api } from '../api.js';
 
 export const Navbar = {
     render(user, app) {
@@ -6,6 +7,7 @@ export const Navbar = {
         if (!navbar) return;
 
         this._app = app;
+        this.user = user;
         const cleanName = user.name || 'Coordinator';
 
         navbar.innerHTML = `
@@ -16,17 +18,18 @@ export const Navbar = {
             <div class="nav-actions">
                 <div class="icon-btn" id="nav-notifications" style="cursor: pointer;">
                     <ion-icon name="notifications-outline"></ion-icon>
-                    <span class="badge">0</span>
+                    <span class="badge" style="display: none;">0</span>
                 </div>
                 <div class="icon-btn" id="nav-messages" style="cursor: pointer;">
                     <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
+                    <span class="badge" style="display: none;">0</span>
                 </div>
                 <div class="user-profile-sm" id="nav-profile-link" style="cursor: pointer; transition: opacity 0.2s;">
                     <div class="user-info-text" style="text-align: right;">
                         <span class="name" style="text-transform: capitalize; font-weight: 700; color: var(--primary);">${cleanName}</span>
                         <span class="role" style="font-weight: 600; font-size: 0.7rem; opacity: 0.6;">COORDINATOR</span>
                     </div>
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${user.entityId || 'coordinator'}" alt="Avatar" class="avatar" style="border: 2px solid var(--border);">
+                    <img id="nav-avatar-img" src="${user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.entityId || 'coordinator'}`}" alt="Avatar" class="avatar" style="border: 2px solid var(--border); width: 40px; height: 40px; border-radius: 8px; object-fit: cover;">
                 </div>
             </div>
         `;
@@ -56,5 +59,49 @@ export const Navbar = {
             profileLink.addEventListener('mouseenter', () => profileLink.style.opacity = '0.7');
             profileLink.addEventListener('mouseleave', () => profileLink.style.opacity = '1');
         }
+
+        // Start Real-time polling
+        this.startPolling();
+    },
+
+    async updateBadges() {
+        try {
+            // Fetch unread notifications and conversations
+            const [notifs, conversations] = await Promise.all([
+                api.get('/notifications'),
+                api.get(`/chat/conversations?userId=${(this.user || window.App.state.user).email || (this.user || window.App.state.user).id}`)
+            ]);
+
+            const notifBadge = document.querySelector('#nav-notifications .badge');
+            const msgBadge = document.querySelector('#nav-messages .badge');
+
+            if (notifBadge) {
+                const unreadNotifs = notifs.filter(n => !n.is_read).length;
+                notifBadge.textContent = unreadNotifs;
+                notifBadge.style.display = unreadNotifs > 0 ? 'flex' : 'none';
+            }
+
+            if (msgBadge) {
+                const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+                msgBadge.textContent = totalUnread;
+                msgBadge.style.display = totalUnread > 0 ? 'flex' : 'none';
+            }
+        } catch (err) {
+            console.error('Badge update error:', err);
+        }
+    },
+
+    startPolling() {
+        if (this.pollInterval) clearInterval(this.pollInterval);
+        this.updateBadges();
+        this.pollInterval = setInterval(() => this.updateBadges(), 10000);
+    },
+
+    // Instantly sync navbar avatar without full re-render
+    updateAvatar(url) {
+        if (!url) return;
+        this.user.avatar_url = url;
+        const img = document.getElementById('nav-avatar-img');
+        if (img) img.src = url;
     }
 };

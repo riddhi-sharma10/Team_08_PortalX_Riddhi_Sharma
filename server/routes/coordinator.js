@@ -103,7 +103,10 @@ router.get('/applications', async (req, res) => {
         const [rows] = await pool.query(`
             SELECT 
                 a.app_id AS id, 
+                a.s_id,
+                a.job_id,
                 s.s_name AS studentName, 
+                s.email AS studentEmail,
                 s.dept, 
                 s.profile_status AS studentProfileStatus,
                 c.comp_name AS company, 
@@ -158,6 +161,61 @@ router.patch('/applications/:id/status', async (req, res) => {
             await conn.query('SELECT s_id FROM STUDENT WHERE s_id = ? FOR UPDATE', [app[0].s_id]);
 
             await conn.query('UPDATE APPLICATION SET status = ? WHERE app_id = ?', [status, id]);
+
+            // --- REAL-TIME NOTIFICATION: Notify student about status change ---
+            try {
+                const [details] = await conn.query(
+                    `SELECT s.email AS stu_email, s.s_name, j.role, c.comp_name
+                     FROM APPLICATION a
+                     JOIN STUDENT s ON a.s_id = s.s_id
+                     JOIN JOB_PROFILE j ON a.job_id = j.job_id
+                     JOIN COMPANY c ON j.comp_id = c.comp_id
+                     WHERE a.app_id = ?`, [id]
+                );
+                if (details.length > 0) {
+                    const d = details[0];
+                    const statusMap = { shortlisted: 'Shortlisted', rejected: 'Rejected', selected: 'Selected', under_review: 'Under Review' };
+                    const label = statusMap[status] || status;
+                    await conn.query(
+                        `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'student', ?, ?, ?)`,
+                        [d.stu_email, `Application ${label}`,
+                         `Your application for ${d.role} at ${d.comp_name} has been ${label.toLowerCase()}.`,
+                         status === 'rejected' ? 'alert' : 'system']
+                    );
+                }
+            } catch (nErr) {
+                console.warn('[Notif] Failed to notify student on status change:', nErr.message);
+            }
+
+            // --- NOTIFY ADMIN: Key status changes (rejected/selected/shortlisted) ---
+            try {
+                if (['rejected', 'selected', 'shortlisted'].includes(status)) {
+                    const [info] = await conn.query(
+                        `SELECT s.s_name, s.dept, j.role, c.comp_name
+                         FROM APPLICATION a
+                         JOIN STUDENT s ON a.s_id = s.s_id
+                         JOIN JOB_PROFILE j ON a.job_id = j.job_id
+                         JOIN COMPANY c ON j.comp_id = c.comp_id
+                         WHERE a.app_id = ?`, [id]
+                    );
+                    if (info.length > 0) {
+                        const d = info[0];
+                        const statusMap = { shortlisted: 'Shortlisted', rejected: 'Rejected', selected: 'Selected' };
+                        const label = statusMap[status];
+                        const [admins] = await conn.query('SELECT email FROM CGDC_ADMIN');
+                        for (const admin of admins) {
+                            await conn.query(
+                                `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'admin', ?, ?, ?)`,
+                                [admin.email, `Student ${label}`,
+                                 `${d.s_name} (${d.dept}) — ${d.role} at ${d.comp_name} has been ${label.toLowerCase()}.`,
+                                 status === 'rejected' ? 'alert' : 'system']
+                            );
+                        }
+                    }
+                }
+            } catch (nErr) {
+                console.warn('[Notif] Failed to notify admin on status change:', nErr.message);
+            }
 
             await conn.commit();
             res.json({ message: 'Status updated successfully' });
@@ -229,6 +287,30 @@ router.post('/interviews', async (req, res) => {
         `, [s_id, job_id, panel || 'General Panel', interview_date, interview_time || null, mode || 'online', room]);
 
         await conn.commit();
+
+        // --- REAL-TIME NOTIFICATION: Notify student about scheduled interview ---
+        try {
+            const [interviewDetails] = await pool.query(
+                `SELECT s.email AS stu_email, s.s_name, j.role, c.comp_name
+                 FROM STUDENT s
+                 JOIN JOB_PROFILE j ON j.job_id = ?
+                 JOIN COMPANY c ON c.comp_id = j.comp_id
+                 WHERE s.s_id = ?`, [job_id, s_id]
+            );
+            if (interviewDetails.length > 0) {
+                const d = interviewDetails[0];
+                const dateStr = new Date(interview_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                const timeStr = interview_time || 'TBD';
+                await pool.query(
+                    `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'student', ?, ?, 'system')`,
+                    [d.stu_email, 'Interview Scheduled',
+                     `Your interview for ${d.role} at ${d.comp_name} is on ${dateStr} at ${timeStr} (${mode || 'online'}).`]
+                );
+            }
+        } catch (nErr) {
+            console.warn('[Notif] Failed to notify student on interview:', nErr.message);
+        }
+
         res.json({ message: 'Interview scheduled successfully' });
     } catch (err) {
         await conn.rollback();
@@ -340,10 +422,10 @@ router.get('/profile', async (req, res) => {
 
         // Basic coordinator info
         const [coords] = await pool.query(
-            'SELECT name, email, phone_no, dept FROM PLACEMENT_COORDINATOR WHERE coord_id = ?',
+            'SELECT name, email, phone_no, dept, avatar_url FROM PLACEMENT_COORDINATOR WHERE coord_id = ?',
             [id]
         );
-        const c = coords[0] || { name: req.user.username, email: 'Not linked', dept: 'General' };
+        const c = coords[0] || { name: req.user.username, email: 'Not linked', dept: 'General', avatar_url: null };
 
         // Total students assigned to this coordinator
         const [studentsRow] = await pool.query(
@@ -371,6 +453,7 @@ router.get('/profile', async (req, res) => {
             email: c.email,
             phone: c.phone_no || 'Not set',
             department: c.dept,
+            avatar_url: c.avatar_url,
             designation: 'Placement Coordinator',
             studentsManaged,
             studentsPlaced,
@@ -379,6 +462,34 @@ router.get('/profile', async (req, res) => {
     } catch (err) {
         console.error('Coordinator Profile Error:', err);
         res.status(500).json({ message: 'Error loading profile' });
+    }
+});
+
+router.put('/profile', async (req, res) => {
+    try {
+        const id = req.user.entityId;
+        const { name, email, phone, avatar_url } = req.body;
+        
+        let updates = [];
+        let params = [];
+
+        if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+        if (email !== undefined) { updates.push('email = ?'); params.push(email); }
+        if (phone !== undefined) { updates.push('phone_no = ?'); params.push(phone); }
+        if (avatar_url !== undefined) { updates.push('avatar_url = ?'); params.push(avatar_url); }
+
+        if (updates.length === 0) {
+            return res.json({ success: true, message: 'No changes provided' });
+        }
+
+        params.push(id);
+        const sql = `UPDATE PLACEMENT_COORDINATOR SET ${updates.join(', ')} WHERE coord_id = ?`;
+        await pool.query(sql, params);
+
+        res.json({ success: true, message: 'Profile updated successfully' });
+    } catch (err) {
+        console.error('Coordinator Profile Update Error:', err);
+        res.status(500).json({ message: 'Error updating coordinator profile', details: err.message });
     }
 });
 

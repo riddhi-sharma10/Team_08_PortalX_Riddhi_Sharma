@@ -98,16 +98,13 @@ async function handleAddCompany(container, currentFilter, app) {
             submitBtn.textContent = 'Saving...';
         }
 
-        await api.post('/admin/company', newCompany);
-
-        // Close modal
+        await api.post('/admin/companies', newCompany);
         closeAddCompanyModal(container);
-
-        // Re-render
-        render(container, app);
+        render(container, app); // Refresh list
     } catch (err) {
         console.error('Failed to add company:', err);
-        alert('Error adding company: ' + err.message);
+        alert('Failed to add company: ' + err.message);
+    } finally {
         const submitBtn = document.getElementById('submitBtn');
         if (submitBtn) {
             submitBtn.disabled = false;
@@ -116,17 +113,18 @@ async function handleAddCompany(container, currentFilter, app) {
     }
 }
 
-function addPositionField() {
-    const container = document.getElementById('positionsContainer');
-    const positionCount = container.querySelectorAll('.position-item').length;
-
+function addPositionField(container) {
     const positionHTML = `
-        <div class="position-item" style="padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; position: relative; display: grid; gap: 12px;">
-            <button type="button" class="remove-position-btn" onclick="this.parentElement.remove()" style="position: absolute; top: 8px; right: 8px; background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">×</button>
-            
-            <div style="display: grid; gap: 6px;">
-                <label style="font-weight: 600; color: var(--text-main); font-size: 0.85rem;">Position Title</label>
-                <input type="text" class="position-title" placeholder="e.g., Software Engineer" style="border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; outline: none;">
+        <div class="position-item" style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px; background: #f8fafc;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <span style="font-weight: 600; font-size: 0.85rem; color: var(--primary);">Position Details</span>
+                <button type="button" onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem;">
+                    <ion-icon name="close-circle-outline"></ion-icon>
+                </button>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; font-weight: 600; color: var(--text-main); font-size: 0.85rem; margin-bottom: 4px;">Role Title *</label>
+                <input type="text" class="position-title" placeholder="e.g., Software Engineer" style="width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; outline: none;">
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -175,6 +173,36 @@ export async function render(container, app) {
     }
 
     let filteredData = [...companiesData];
+
+    const applyFilter = (filterType) => {
+        if (filterType === 'all') {
+            filteredData = [...companiesData];
+        } else if (filterType === 'tier1') {
+            filteredData = companiesData.filter(c => c.tier === 'Tier 1');
+        } else if (filterType === 'tier2') {
+            filteredData = companiesData.filter(c => c.tier === 'Tier 2');
+        } else if (filterType === 'tier3') {
+            filteredData = companiesData.filter(c => c.tier === 'Tier 3');
+        } else if (filterType === 'startup') {
+            filteredData = companiesData.filter(c => c.tier === 'Startup');
+        }
+
+        const tableBody = document.getElementById('companiesTableBody');
+        if (tableBody) {
+            tableBody.innerHTML = renderTable();
+            wireViewButtons();
+        }
+
+        const counterDiv = document.getElementById('companiesCounter');
+        if (counterDiv) {
+            counterDiv.textContent = `Showing ${filteredData.length} of ${companiesData.length} companies`;
+        }
+
+        // Update active class
+        document.querySelectorAll('.filter-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.filter === filterType);
+        });
+    };
 
     const renderTable = () => {
         let tableHTML = '';
@@ -237,6 +265,9 @@ export async function render(container, app) {
                 <div class="companies-filters" id="filterContainer">
                     ${renderFilters()}
                 </div>
+                <div id="companiesCounter" style="font-size: 0.85rem; color: var(--text-muted);">
+                    Showing ${companiesData.length} of ${companiesData.length} companies
+                </div>
             </div>
 
             <div class="data-table-container" style="border-top: 1px solid var(--border);">
@@ -248,10 +279,10 @@ export async function render(container, app) {
                             <th style="padding: 12px 16px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Industry</th>
                             <th style="padding: 12px 16px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Tier</th>
                             <th style="padding: 12px 16px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Active Jobs</th>
-                            <th style="padding: 12px 16px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Total Placements</th>
+                            <th style="padding: 12px 16px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Placements</th>
                             <th style="padding: 12px 16px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Positions</th>
                             <th style="padding: 12px 16px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Status</th>
-                            <th style="padding: 12px 16px; text-align: left; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Action</th>
+                            <th style="padding: 12px 16px; text-align: right; font-weight: 700; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="companiesTableBody">
@@ -259,147 +290,144 @@ export async function render(container, app) {
                     </tbody>
                 </table>
             </div>
-
-            <div style="padding: 16px 20px; background: var(--bg-secondary); border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--text-muted);" id="companiesCounter">
-                Showing ${filteredData.length} of ${companiesData.length} companies
-            </div>
         </div>
 
         <!-- Add Company Modal -->
-        <div id="addCompanyModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 1000; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(6px);">
-            <div style="background: white; border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,0.22); width: 100%; max-width: 860px; max-height: 92vh; overflow-y: auto; border: 1px solid #dbe4f0;">
-                <div style="padding: 24px 28px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; background: linear-gradient(180deg, #ffffff, #f8fbff); position: sticky; top: 0; z-index: 1;">
-                    <div>
-                        <p style="margin: 0 0 6px 0; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">New Partner Record</p>
-                        <h2 style="font-size: 1.65rem; color: var(--primary); margin: 0;">Add New Company</h2>
-                        <p style="margin: 8px 0 0 0; color: var(--text-muted);">Capture full company profile, contact details, and multiple open positions.</p>
-                    </div>
-                    <button id="closeModalBtn" type="button" style="background: #eff6ff; border: 1px solid #bfdbfe; font-size: 1.35rem; color: var(--primary); cursor: pointer; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 700;">×</button>
+        <div id="addCompanyModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px);">
+            <div style="background: white; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto;">
+                <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 10;">
+                    <h2 style="font-size: 1.25rem; color: var(--primary); margin: 0;">Add New Partner Company</h2>
+                    <button id="closeModalBtn" style="background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer;">×</button>
                 </div>
 
-                <form id="companyForm" style="display: grid; gap: 18px; padding: 24px 28px 28px;">
-                    <div style="display: grid; gap: 12px;">
-                        <h3 style="font-size: 1rem; color: #0f1f46; margin: 0;">Company Details</h3>
-                        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
-                            <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Company Name *</label>
-                                <input type="text" id="companyName" placeholder="e.g., Google India" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                            </div>
-
-                            <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Industry *</label>
-                                <input type="text" id="industry" placeholder="e.g., Technology" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                            </div>
-
-                            <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Tier *</label>
-                                <select id="tier" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                                    <option value="">Select a tier</option>
-                                    <option value="Tier 1">Tier 1</option>
-                                    <option value="Tier 2">Tier 2</option>
-                                    <option value="Startup">Startup</option>
-                                </select>
-                            </div>
-
-                            <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Location</label>
-                                <input type="text" id="location" placeholder="e.g., Bengaluru, India" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                            </div>
-
-                            <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Website</label>
-                                <input type="text" id="website" placeholder="e.g., https://company.com" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                            </div>
-
-                            <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Established Year</label>
-                                <input type="text" id="establishedYear" placeholder="e.g., 1998" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                            </div>
+                <form id="companyForm" style="padding: 20px; display: grid; gap: 15px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Company Name *</label>
+                            <input type="text" id="companyName" required style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
+                        </div>
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Industry *</label>
+                            <input type="text" id="industry" required placeholder="e.g. Technology, Finance" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
                         </div>
                     </div>
 
-                    <div style="display: grid; gap: 12px;">
-                        <h3 style="font-size: 1rem; color: #0f1f46; margin: 0;">Contact & Overview</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div style="display: grid; gap: 6px;">
-                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Company Description</label>
-                            <textarea id="description" rows="3" placeholder="Short note about the company, hiring focus, or campus drive details" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none; resize: vertical;"></textarea>
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Tier *</label>
+                            <select id="tier" required style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
+                                <option value="Tier 1">Tier 1</option>
+                                <option value="Tier 2">Tier 2</option>
+                                <option value="Tier 3">Tier 3</option>
+                                <option value="Startup">Startup</option>
+                            </select>
                         </div>
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Location</label>
+                            <input type="text" id="location" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
+                        </div>
+                    </div>
 
-                        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Website</label>
+                            <input type="url" id="website" placeholder="https://..." style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
+                        </div>
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Established Year</label>
+                            <input type="number" id="establishedYear" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
+                        </div>
+                    </div>
+
+                    <div style="border-top: 1px solid var(--border); padding-top: 15px; margin-top: 5px;">
+                        <h3 style="font-size: 1rem; color: var(--primary); margin: 0 0 15px 0;">Contact Details</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                             <div style="display: grid; gap: 6px;">
                                 <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Contact Person</label>
-                                <input type="text" id="contactPerson" placeholder="e.g., HR Manager" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                                <input type="text" id="contactPerson" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
                             </div>
                             <div style="display: grid; gap: 6px;">
                                 <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Contact Email</label>
-                                <input type="email" id="contactEmail" pattern="[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$" title="Please enter a valid email address" placeholder="e.g., hr@company.com" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                            </div>
-                            <div style="display: grid; gap: 6px;">
-                                <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Contact Phone</label>
-                                <input type="text" id="contactPhone" pattern="[0-9]{10}" maxlength="10" title="Phone number must be exactly 10 digits" placeholder="e.g., 9876543210" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                                <input type="email" id="contactEmail" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
                             </div>
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div style="display: grid; gap: 6px;">
-                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Active Jobs</label>
-                            <input type="number" id="activeJobs" placeholder="0" min="0" value="0" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Contact Phone</label>
+                            <input type="text" id="contactPhone" maxlength="10" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
                         </div>
                         <div style="display: grid; gap: 6px;">
-                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Total Placements</label>
-                            <input type="number" id="placements" placeholder="0" min="0" value="0" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Status</label>
+                            <select id="status" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Active Jobs</label>
+                            <input type="number" id="activeJobs" value="0" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
+                        </div>
+                        <div style="display: grid; gap: 6px;">
+                            <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Placements</label>
+                            <input type="number" id="placements" value="0" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none;">
                         </div>
                     </div>
 
                     <div style="display: grid; gap: 6px;">
-                        <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Status</label>
-                        <select id="status" style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                        </select>
+                        <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Description</label>
+                        <textarea id="description" rows="3" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.95rem; outline: none; resize: vertical;"></textarea>
                     </div>
 
-                    <div style="display: grid; gap: 12px; padding-top: 12px; border-top: 2px solid #e2e8f0;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <label style="font-weight: 700; color: var(--text-main); font-size: 0.95rem;">Job Positions</label>
-                            <button type="button" id="addPositionBtn" onclick="addPositionField()" style="background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 12px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;">+ Add Position</button>
+                    <div style="border-top: 1px solid var(--border); padding-top: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h3 style="font-size: 1rem; color: var(--primary); margin: 0;">Open Positions</h3>
+                            <button type="button" id="addPositionBtn" style="background: #eff6ff; color: var(--primary); border: 1px solid #bfdbfe; padding: 4px 10px; border-radius: 4px; font-size: 0.85rem; cursor: pointer; font-weight: 600;">+ Add Position</button>
                         </div>
-                        <p style="color: var(--text-muted); font-size: 0.85rem; margin: -4px 0 0 0;">Add one or more positions with title, salary range, and required skills.</p>
-                        <div id="positionsContainer" style="display: grid; gap: 12px;"></div>
+                        <div id="positionsList"></div>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button type="button" id="cancelBtn" style="flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--text-main); font-weight: 600; cursor: pointer; transition: all 0.2s;">Cancel</button>
-                        <button type="button" id="submitBtn" style="flex: 1; padding: 12px 16px; border: none; border-radius: 8px; background: var(--primary); color: white; font-weight: 600; cursor: pointer; transition: all 0.2s;">Add Company</button>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; padding-top: 20px; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: white; z-index: 10;">
+                        <button type="button" id="cancelBtn" style="padding: 10px 20px; border-radius: 6px; border: 1px solid var(--border); background: white; cursor: pointer; font-weight: 600;">Cancel</button>
+                        <button type="button" id="submitBtn" class="btn-primary" style="padding: 10px 25px; border-radius: 6px; border: none; font-weight: 600;">Save Company</button>
                     </div>
                 </form>
             </div>
         </div>
     `;
 
+    // Apply initial filter
+    applyFilter(currentFilter);
+
     // Event listeners
     const addBtn = document.getElementById('addCompanyBtn');
     const closeBtn = document.getElementById('closeModalBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     const submitBtn = document.getElementById('submitBtn');
-    const filterBtns = document.querySelectorAll('.filter-btn');
+    const addPosBtn = document.getElementById('addPositionBtn');
 
     if (addBtn) addBtn.addEventListener('click', () => openAddCompanyModal(container));
     if (closeBtn) closeBtn.addEventListener('click', () => closeAddCompanyModal(container));
     if (cancelBtn) cancelBtn.addEventListener('click', () => closeAddCompanyModal(container));
+    if (addPosBtn) addPosBtn.addEventListener('click', () => addPositionField(document.getElementById('positionsList')));
+    
     if (submitBtn) submitBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         await handleAddCompany(container, currentFilter, app);
     });
 
-    // Close modal when clicking outside
-    const modal = document.getElementById('addCompanyModal');
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeAddCompanyModal(container);
+    // Filter functionality
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const filterType = btn.dataset.filter;
+            currentFilter = filterType;
+            applyFilter(filterType);
         });
-    }
+    });
 
     // View company detail buttons (delegated)
     function wireViewButtons() {
@@ -429,42 +457,6 @@ export async function render(container, app) {
             });
         });
     }
+
     wireViewButtons();
-
-    // Filter functionality
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const filterType = btn.dataset.filter;
-            currentFilter = filterType;
-
-            if (filterType === 'all') {
-                filteredData = [...companiesData];
-            } else if (filterType === 'tier1') {
-                filteredData = companiesData.filter(c => c.tier === 'Tier 1');
-            } else if (filterType === 'tier2') {
-                filteredData = companiesData.filter(c => c.tier === 'Tier 2');
-            } else if (filterType === 'tier3') {
-                filteredData = companiesData.filter(c => c.tier === 'Tier 3');
-            } else if (filterType === 'startup') {
-                filteredData = companiesData.filter(c => c.tier === 'Startup');
-            }
-
-            // Update table
-            const tableBody = document.getElementById('companiesTableBody');
-            if (tableBody) {
-                tableBody.innerHTML = renderTable();
-                wireViewButtons();
-            }
-
-            // Update filter buttons
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            // Update counter
-            const counterDiv = document.getElementById('companiesCounter');
-            if (counterDiv) {
-                counterDiv.textContent = `Showing ${filteredData.length} of ${companiesData.length} companies`;
-            }
-        });
-    });
 }
