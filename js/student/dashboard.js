@@ -73,7 +73,7 @@ function renderDashboard(container, app, applications, jobs) {
                     <div class="card" style="padding: 24px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                             <h3 style="font-weight: 800; color: var(--text-main);">Recent Applications</h3>
-                            <button onclick="window.navTo('applications')" style="color: var(--primary); font-weight: 700; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                            <button id="btn-view-all-apps" style="color: var(--primary); font-weight: 700; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px;">
                                 View All <ion-icon name="arrow-forward-outline"></ion-icon>
                             </button>
                         </div>
@@ -152,6 +152,14 @@ function renderDashboard(container, app, applications, jobs) {
             </div>
         </div>
     `;
+
+    // Add navigation listeners
+    const viewAllBtn = document.getElementById('btn-view-all-apps');
+    if (viewAllBtn) {
+        viewAllBtn.addEventListener('click', () => {
+            app.navigateTo('applications');
+        });
+    }
 }
 
 function renderTimelineStep({ title, desc, status, icon }) {
