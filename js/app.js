@@ -168,6 +168,13 @@ const App = {
     },
 
     async navigateTo(pageId) {
+        // PREVENT RE-RENDERING IF SAME PAGE AND IS QUERIES
+        // (to keep query results from disappearing on auto-refresh)
+        if (this.state.currentPage === pageId && pageId === 'queries' && document.getElementById('query-results')?.innerHTML.includes('table')) {
+            console.log('[Navigate] Skipping re-render for Queries to preserve results');
+            return;
+        }
+
         this.state.currentPage = pageId;
         sessionStorage.setItem('current_page', pageId);
         const pageContent = document.getElementById('page-content');

@@ -61,6 +61,164 @@ const QUERY_REGISTRY = {
         roles: ['student', 'coordinator', 'admin'],
         description: 'Companies ranked by their recruitment volume in the current cycle.'
     },
+    'vw_accurate_company_stats': {
+        name: 'Accurate Company Stats',
+        category: 'view',
+        sql: 'SELECT * FROM vw_accurate_company_stats',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Verified real-time statistics for all participating companies.'
+    },
+    'vw_accurate_visit_history': {
+        name: 'Accurate Visit History',
+        category: 'view',
+        sql: 'SELECT * FROM vw_accurate_visit_history',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Chronological recruitment history for past academic years.'
+    },
+    'vw_app_full_details': {
+        name: 'Application Full Details',
+        category: 'view',
+        sql: `
+            SELECT a.app_id, c.comp_name, j.role, a.applied_date, a.status, a.ats_score
+            FROM APPLICATION a
+            JOIN JOB_PROFILE j ON a.job_id = j.job_id
+            JOIN COMPANY c ON j.comp_id = c.comp_id
+            WHERE a.s_id = ?
+        `,
+        roles: ['student'],
+        description: 'Master view of your applications including roles and current results.'
+    },
+    'vw_closed_jobs': {
+        name: 'Closed Job Openings',
+        category: 'view',
+        sql: 'SELECT * FROM vw_closed_jobs',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Record of jobs that have finished their recruitment cycle.'
+    },
+    'vw_companies_by_tier': {
+        name: 'Companies by Tier',
+        category: 'view',
+        sql: 'SELECT * FROM vw_companies_by_tier',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'List of all registered companies categorized by their institutional tier.'
+    },
+    'vw_company_placement_count': {
+        name: 'Placement Count by Company',
+        category: 'view',
+        sql: 'SELECT * FROM vw_companies_placement_count',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Total student placements achieved per company.'
+    },
+    'vw_company_job_stats': {
+        name: 'Company Job Stats',
+        category: 'view',
+        sql: 'SELECT * FROM vw_company_job_stats',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Job distribution and average package analysis per company.'
+    },
+    'vw_company_max_salary': {
+        name: 'Maximum Salaries Offered',
+        category: 'view',
+        sql: 'SELECT * FROM vw_company_max_salary',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Highlights the highest salary packages offered by each firm.'
+    },
+    'vw_company_visit_trends': {
+        name: 'Company Visit Trends',
+        category: 'view',
+        sql: 'SELECT * FROM vw_company_visit_trends',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Analyzes recruitment frequency and timing over several years.'
+    },
+    'vw_interviews_per_company': {
+        name: 'Interviews per Company',
+        category: 'view',
+        sql: 'SELECT * FROM vw_interviews_per_company',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Analysis of interview volume and scheduling per firm.'
+    },
+    'vw_job_profile_details': {
+        name: 'Job Profile Details (Extended)',
+        category: 'view',
+        sql: 'SELECT * FROM vw_job_profile_details',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Comprehensive data on all active and historical job profiles.'
+    },
+    'vw_jobs_by_eligibility': {
+        name: 'Jobs by Eligibility',
+        category: 'view',
+        sql: 'SELECT * FROM vw_jobs_by_eligibility',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Categorizes job opportunities based on CGPA and branch requirements.'
+    },
+    'vw_jobs_by_type': {
+        name: 'Jobs by Type',
+        category: 'view',
+        sql: 'SELECT * FROM vw_jobs_by_type',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Breakdown of roles into Full-Time, Internship, and Contract categories.'
+    },
+    'vw_max_salary_per_company': {
+        name: 'Max Salary per Company',
+        category: 'view',
+        sql: 'SELECT * FROM vw_max_salary_per_company',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Comparison of the peak salary packages offered across all registered firms.'
+    },
+    'vw_open_jobs': {
+        name: 'Open Job Openings',
+        category: 'view',
+        sql: 'SELECT * FROM vw_open_jobs',
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Real-time list of all job profiles currently accepting applications.'
+    },
+    'vw_student_app_stats': {
+        name: 'My Application Statistics',
+        category: 'view',
+        sql: 'SELECT * FROM vw_student_application_stats WHERE s_id = ?',
+        roles: ['student'],
+        description: 'Summary of your total applications and departmental records.'
+    },
+    'sub_premium_opps': {
+        name: 'Premium Package Opportunities',
+        category: 'subquery',
+        sql: `
+            SELECT comp_name, industry_type, avg_package_offered 
+            FROM COMPANY 
+            WHERE avg_package_offered > (SELECT AVG(avg_package_offered) FROM COMPANY)
+            ORDER BY avg_package_offered DESC
+        `,
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Companies offering packages significantly higher than the portal average.'
+    },
+    'sub_missed_jobs': {
+        name: 'Missed Eligible Jobs',
+        category: 'subquery',
+        sql: `
+            SELECT j.role, c.comp_name, j.package, j.app_deadline
+            FROM JOB_PROFILE j
+            JOIN COMPANY c ON j.comp_id = c.comp_id
+            JOIN STUDENT s ON s.s_id = ?
+            WHERE j.status = 'open'
+            AND j.eligibility_cgpa <= s.cgpa
+            AND j.job_id NOT IN (SELECT job_id FROM APPLICATION WHERE s_id = s.s_id)
+        `,
+        roles: ['student'],
+        description: 'Active jobs you are qualified for but have not applied to yet.'
+    },
+    'sub_major_recruiters': {
+        name: 'Active Major Recruiters',
+        category: 'subquery',
+        sql: `
+            SELECT comp_name, industry_type, website
+            FROM COMPANY
+            WHERE comp_id IN (
+                SELECT comp_id FROM JOB_PROFILE GROUP BY comp_id HAVING COUNT(*) > 1
+            )
+        `,
+        roles: ['student', 'coordinator', 'admin'],
+        description: 'Companies that have posted multiple different job profiles.'
+    },
     'vw_placement_status': {
         name: 'My Placement Status',
         category: 'view',
@@ -211,21 +369,13 @@ router.post('/run/:id', requireAuth, async (req, res) => {
 
     try {
         let params = [];
-        // Context Injection based on role
-        if (queryInfo.sql.includes('?')) {
-            if (role === 'student') {
-                params = [req.user.entityId];
-            } else if (role === 'coordinator') {
-                // If query has two ?, use dept and role
-                if ((queryInfo.sql.match(/\?/g) || []).length >= 2) {
-                    // Try to get dept from request or user object
-                    params = [req.user.dept || 'CS', role]; 
-                } else {
-                    params = [req.user.dept || 'CS'];
-                }
-            } else if (role === 'admin') {
-                params = ['admin', 'admin'];
-            }
+        // Dynamic parameter binding based on number of placeholders
+        const placeholderCount = (queryInfo.sql.match(/\?/g) || []).length;
+        
+        if (placeholderCount > 0) {
+            // Use entityId (from JWT) to fill placeholders
+            const contextId = req.user.entityId || req.user.entity_id;
+            params = Array(placeholderCount).fill(contextId);
         }
 
         const [rows] = await pool.query(queryInfo.sql, params);

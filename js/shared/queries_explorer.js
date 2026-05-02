@@ -15,7 +15,6 @@ export const QueriesExplorer = {
         container.innerHTML = `
             <div class="analytics-header">
                 <div class="analytics-title">
-                    <ion-icon name="database-outline"></ion-icon>
                     <div>
                         <h1>Advanced Query Laboratory</h1>
                         <p>Direct access to Tables, Views, Joins, and Subqueries for analytical insights.</p>
@@ -125,6 +124,28 @@ export const QueriesExplorer = {
             const queryId = querySelect.value;
             if (queryId) this.runQuery(queryId);
         });
+
+        // Copy SQL to Clipboard
+        container.querySelector('#copy-sql-btn')?.addEventListener('click', async (e) => {
+            const sqlText = container.querySelector('#sql-display').innerText;
+            const icon = e.currentTarget.querySelector('ion-icon');
+            
+            try {
+                await navigator.clipboard.writeText(sqlText);
+                
+                // Visual Feedback
+                const originalName = icon.getAttribute('name');
+                icon.setAttribute('name', 'checkmark-outline');
+                icon.style.color = '#10b981'; // Green
+                
+                setTimeout(() => {
+                    icon.setAttribute('name', originalName);
+                    icon.style.color = '';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy!', err);
+            }
+        });
     },
 
     async runQuery(queryId) {
@@ -196,8 +217,19 @@ export const QueriesExplorer = {
                                 <tr>
                                     ${headers.map(h => {
                                         let val = row[h];
-                                        if (val === null) val = '<span class="null-val">NULL</span>';
-                                        if (h.toLowerCase().includes('date') && val) val = new Date(val).toLocaleDateString();
+                                        const headerLower = h.toLowerCase();
+                                        
+                                        if (val === null) {
+                                            // Show 0.00 for salary/package/count columns, otherwise show a dash
+                                            if (headerLower.includes('salary') || headerLower.includes('package') || headerLower.includes('count') || headerLower.includes('placed')) {
+                                                val = '0.00';
+                                            } else {
+                                                val = '<span class="null-val">—</span>';
+                                            }
+                                        } else if (headerLower.includes('date') && val) {
+                                            val = new Date(val).toLocaleDateString();
+                                        }
+                                        
                                         return `<td>${val}</td>`;
                                     }).join('')}
                                 </tr>
