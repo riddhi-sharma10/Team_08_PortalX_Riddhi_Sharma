@@ -13,14 +13,19 @@ const pool = mysql.createPool({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+    connectionLimit: 30, // Increased for stability
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
 // Test the connection when server starts
 pool.getConnection()
     .then(conn => {
-        console.log('✅ MySQL connected successfully!');
+        console.log('✅ MySQL connected successfully with SSL!');
         conn.release(); // return it to the pool
     })
     .catch(err => {

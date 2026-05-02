@@ -48,4 +48,26 @@ router.put('/profile', requireAuth, async (req, res) => {
     }
 });
 
+// Opt-out from placement process
+router.post('/opt-out', requireAuth, async (req, res) => {
+    if (req.user.role !== 'student') return res.status(403).json({ message: 'Access denied' });
+
+    try {
+        const student_id = req.user.entityId;
+        // Check current status
+        const [student] = await pool.query('SELECT profile_status FROM STUDENT WHERE s_id = ?', [student_id]);
+        
+        if (student.length === 0) return res.status(404).json({ message: 'Student not found' });
+        if (student[0].profile_status !== 'active') {
+            return res.status(400).json({ message: 'Only active students can opt out.' });
+        }
+
+        await pool.query("UPDATE STUDENT SET profile_status = 'opted_out' WHERE s_id = ?", [student_id]);
+        res.json({ message: 'You have successfully opted out of the placement process.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error opting out: ' + err.message });
+    }
+});
+
 export default router;

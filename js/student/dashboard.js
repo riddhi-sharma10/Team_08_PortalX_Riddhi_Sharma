@@ -16,12 +16,13 @@ export async function render(container, app) {
 
     try {
         // Fetch all student-related data in parallel
-        const [applications, jobs] = await Promise.all([
+        const [applications, jobs, profile] = await Promise.all([
             api.get('/applications'),
-            api.get('/jobs')
+            api.get('/jobs'),
+            api.get('/students/profile')
         ]);
 
-        renderDashboard(container, app, applications, jobs);
+        renderDashboard(container, app, applications, jobs, profile);
     } catch (err) {
         container.innerHTML = `
             <div class="card" style="padding: 40px; text-align: center; margin: 24px;">
@@ -34,7 +35,8 @@ export async function render(container, app) {
     }
 }
 
-function renderDashboard(container, app, applications, jobs) {
+function renderDashboard(container, app, applications, jobs, profile) {
+    const isPlaced = profile.profile_status === 'placed';
     const stats = {
         total: applications.length,
         underReview: applications.filter(a => a.status === 'under_review').length,
@@ -53,7 +55,13 @@ function renderDashboard(container, app, applications, jobs) {
                     <h1 style="font-size: 2.2rem; color: var(--primary); font-weight: 800; letter-spacing: -0.5px;">Hey, ${firstName}! 👋</h1>
                     <p style="color: var(--text-muted); font-size: 1.1rem; margin-top: 4px;">Welcome to your personalized recruitment command center.</p>
                 </div>
-
+                ${isPlaced 
+                    ? `<div class="tag tag-success" style="padding: 12px 24px; font-size: 1rem; border-radius: 12px; display:flex; align-items:center; gap:8px; border: 2px solid #22c55e;">
+                        <ion-icon name="trophy" style="font-size:1.4rem;"></ion-icon>
+                        <span style="font-weight:900;">OFFICIALLY PLACED</span>
+                       </div>`
+                    : `<div class="tag tag-info" style="padding: 12px 24px; font-size: 1rem; border-radius: 12px; font-weight:800; border: 1px solid #e2e8f0;">RECRUITMENT ACTIVE</div>`
+                }
             </div>
 
             <!-- Stats Grid -->

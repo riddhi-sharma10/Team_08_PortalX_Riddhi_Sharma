@@ -19,7 +19,7 @@ router.get('/dashboard', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         console.log(`[Coordinator API] Fetching dashboard for ID: ${id}`);
-        
+
         const [students] = await pool.query('SELECT COUNT(*) AS total FROM STUDENT WHERE coord_id = ?', [id]);
         const [offers] = await pool.query(`SELECT COUNT(DISTINCT o.s_id) AS placed FROM OFFER o INNER JOIN STUDENT s ON o.s_id = s.s_id WHERE s.coord_id = ? AND LOWER(o.offer_status) = 'accepted'`, [id]);
         const [apps] = await pool.query(`SELECT COUNT(*) AS total FROM APPLICATION a INNER JOIN STUDENT s ON a.s_id = s.s_id WHERE s.coord_id = ?`, [id]);
@@ -37,7 +37,7 @@ router.get('/dashboard', async (req, res) => {
             ORDER BY count DESC
             LIMIT 5
         `, [id]);
-        
+
         console.log(`[Coordinator API] ID ${id}: Found ${students[0]?.total} students and ${rows.length} chart rows.`);
 
         const tStudents = Number(students[0]?.total || 0);
@@ -96,7 +96,16 @@ router.get('/applications', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const [rows] = await pool.query(`
-            SELECT a.app_id AS id, s.s_name AS studentName, s.dept, c.comp_name AS company, j.role, j.package AS packageLpa, a.status, a.ats_score AS atsScore
+            SELECT 
+                a.app_id AS id, 
+                s.s_name AS studentName, 
+                s.dept, 
+                s.profile_status AS studentProfileStatus,
+                c.comp_name AS company, 
+                j.role, 
+                j.package AS packageLpa, 
+                a.status, 
+                a.ats_score AS atsScore
             FROM APPLICATION a
             INNER JOIN STUDENT s ON a.s_id = s.s_id
             INNER JOIN JOB_PROFILE j ON a.job_id = j.job_id
@@ -113,6 +122,33 @@ router.get('/applications', async (req, res) => {
         })));
     } catch (err) {
         res.status(500).json({ message: 'Error loading applications' });
+    }
+});
+
+// Update Application Status
+router.patch('/applications/:id/status', async (req, res) => {
+    try {
+        const { status } = req.body;
+        const { id } = req.params;
+        const coordId = req.user.entityId;
+
+        // Verify the student belongs to this coordinator
+        const [app] = await pool.query(`
+            SELECT a.app_id 
+            FROM APPLICATION a
+            JOIN STUDENT s ON a.s_id = s.s_id
+            WHERE a.app_id = ? AND s.coord_id = ?
+        `, [id, coordId]);
+
+        if (app.length === 0) {
+            return res.status(403).json({ message: 'Unauthorized to update this application' });
+        }
+
+        await pool.query('UPDATE APPLICATION SET status = ? WHERE app_id = ?', [status, id]);
+        res.json({ message: 'Status updated successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error updating status' });
     }
 });
 

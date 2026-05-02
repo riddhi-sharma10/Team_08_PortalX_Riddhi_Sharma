@@ -234,12 +234,47 @@ function renderShell(container, app) {
                             </div>
                         </div>
                     </div>
+
+                    ${rawStatus === 'active' ? `
+                        <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
+                            <h4 style="color: #ef4444; font-size: 0.9rem; font-weight: 800; margin-bottom: 8px;">DANGER ZONE</h4>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px;">Opt out from the official placement process. This action is permanent.</p>
+                            <button id="opt-out-btn" style="width: 100%; padding: 12px; background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; border-radius: 10px; font-weight: 800; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                <ion-icon name="exit-outline" style="font-size: 1.2rem;"></ion-icon>
+                                Opt Out of Placements
+                            </button>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
         </div>
     `;
 
     // Add event listeners
+    const optOutBtn = document.getElementById('opt-out-btn');
+    if (optOutBtn) {
+        optOutBtn.addEventListener('click', async () => {
+            const confirmed = confirm('Are you absolutely sure you want to opt out? You will no longer be able to apply for any job opportunities through this portal.');
+            if (confirmed) {
+                try {
+                    optOutBtn.disabled = true;
+                    optOutBtn.innerHTML = '<ion-icon name="sync-outline" class="spin"></ion-icon> Processing...';
+                    
+                    const res = await api.post('/students/opt-out');
+                    alert(res.message);
+                    
+                    // Refresh profile
+                    studentProfile = await api.get('/students/profile');
+                    renderShell(container, app);
+                } catch (err) {
+                    alert(err.message);
+                    optOutBtn.disabled = false;
+                    optOutBtn.innerHTML = '<ion-icon name="exit-outline"></ion-icon> Opt Out of Placements';
+                }
+            }
+        });
+    }
+
     const updateBtn = document.getElementById('update-resume-btn');
     if (updateBtn) {
         updateBtn.addEventListener('click', async () => {
