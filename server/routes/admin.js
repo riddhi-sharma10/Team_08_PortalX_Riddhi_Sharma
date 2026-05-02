@@ -15,21 +15,21 @@ router.use(requireAuth, requireAdmin);
 
 router.get('/dashboard', async (req, res) => {
     try {
-        const [students] = await pool.query('SELECT COUNT(*) AS count FROM STUDENT');
+        const [students] = await pool.query("SELECT COUNT(*) AS count FROM STUDENT");
         const [companies] = await pool.query('SELECT COUNT(*) AS count FROM COMPANY');
         const [applications] = await pool.query('SELECT COUNT(*) AS count FROM APPLICATION');
-        const [verified] = await pool.query("SELECT COUNT(*) AS count FROM STUDENT WHERE profile_status IN ('active')");
+        const [verified] = await pool.query("SELECT COUNT(*) AS count FROM STUDENT WHERE profile_status NOT IN ('opted_out', 'not_eligible')");
         const [interviews] = await pool.query("SELECT COUNT(*) AS count FROM APPLICATION WHERE status IN ('under_review', 'shortlisted')");
-        const [offers] = await pool.query("SELECT COUNT(DISTINCT s_id) AS count FROM APPLICATION WHERE status IN ('selected')");
-        const [totalJobOffers] = await pool.query("SELECT COUNT(*) AS count FROM APPLICATION WHERE status IN ('selected')");
+        const [offers] = await pool.query("SELECT COUNT(DISTINCT s_id) AS count FROM PLACEMENT_RECORD");
+        const [totalJobOffers] = await pool.query("SELECT COUNT(*) AS count FROM PLACEMENT_RECORD");
 
         const [trend] = await pool.query(`
-            SELECT DATE_FORMAT(applied_date, '%b') AS label,
-                   MONTH(applied_date) AS monthIndex,
-                   SUM(CASE WHEN status IN ('selected') THEN 1 ELSE 0 END) AS placements
-            FROM APPLICATION
-            WHERE applied_date IS NOT NULL
-            GROUP BY MONTH(applied_date), DATE_FORMAT(applied_date, '%b')
+            SELECT DATE_FORMAT(recorded_on, '%b') AS label,
+                   MONTH(recorded_on) AS monthIndex,
+                   COUNT(*) AS placements
+            FROM PLACEMENT_RECORD
+            WHERE recorded_on IS NOT NULL
+            GROUP BY MONTH(recorded_on), DATE_FORMAT(recorded_on, '%b')
             ORDER BY monthIndex
             LIMIT 6
         `);
@@ -42,10 +42,9 @@ router.get('/dashboard', async (req, res) => {
         `);
 
         const [departments] = await pool.query(`
-            SELECT COALESCE(s.dept, 'Unknown') AS name, COUNT(DISTINCT a.s_id) AS placed
-            FROM APPLICATION a
-            JOIN STUDENT s ON s.s_id = a.s_id
-            WHERE a.status IN ('selected')
+            SELECT COALESCE(s.dept, 'Unknown') AS name, COUNT(DISTINCT pr.s_id) AS placed
+            FROM PLACEMENT_RECORD pr
+            JOIN STUDENT s ON s.s_id = pr.s_id
             GROUP BY COALESCE(s.dept, 'Unknown')
             ORDER BY placed DESC
             LIMIT 3
@@ -53,10 +52,9 @@ router.get('/dashboard', async (req, res) => {
 
         const [topCompanies] = await pool.query(`
             SELECT c.comp_name AS name, COALESCE(c.industry_type, 'N/A') AS industry,
-                   SUM(CASE WHEN a.status IN ('selected') THEN 1 ELSE 0 END) AS offers
+                   COUNT(pr.record_id) AS offers
             FROM COMPANY c
-            LEFT JOIN JOB_PROFILE j ON j.comp_id = c.comp_id
-            LEFT JOIN APPLICATION a ON a.job_id = j.job_id
+            LEFT JOIN PLACEMENT_RECORD pr ON pr.comp_id = c.comp_id
             GROUP BY c.comp_id, c.comp_name, c.industry_type
             ORDER BY offers DESC, c.comp_name ASC
             LIMIT 5
@@ -67,25 +65,24 @@ router.get('/dashboard', async (req, res) => {
                 s.s_name AS student, 
                 COALESCE(s.dept, 'Unknown') AS department,
                 CASE 
-                    WHEN s.profile_status = 'opted_out' THEN '-'
+                    WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN '-'
                     WHEN best_pr.comp_id IS NOT NULL THEN COALESCE(c.comp_name, '-')
-                    WHEN latest_app.job_id IS NOT NULL THEN COALESCE(ac.comp_name, '-')
                     ELSE '-'
                 END AS company,
                 CASE 
-                    WHEN s.profile_status = 'opted_out' THEN 0
+                    WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN 0
                     WHEN best_pr.comp_id IS NOT NULL THEN best_pr.salary_offered
-                    WHEN latest_app.job_id IS NOT NULL THEN COALESCE(aj.package, 0)
                     ELSE 0
                 END AS packageLpa,
                 CASE 
                     WHEN s.profile_status = 'opted_out' THEN 'opted_out'
                     WHEN s.profile_status = 'not_eligible' THEN 'not_eligible'
                     WHEN best_pr.record_id IS NOT NULL THEN 'placed'
-                    WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'in-progress'
+                    WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'active'
                     WHEN latest_app.status = 'rejected' THEN 'rejected'
                     ELSE 'active'
-                END AS status
+                END AS status,
+                s.graduation_yr AS graduation_yr
             FROM STUDENT s
             LEFT JOIN (
                 SELECT pr1.* 
@@ -107,7 +104,6 @@ router.get('/dashboard', async (req, res) => {
             LEFT JOIN JOB_PROFILE aj ON latest_app.job_id = aj.job_id
             LEFT JOIN COMPANY ac ON aj.comp_id = ac.comp_id
             ORDER BY COALESCE(best_pr.academic_year, s.graduation_yr) DESC, s.s_id DESC
-            LIMIT 50
         `);
 
         const totalStudents = Number(students[0]?.count || 0);
@@ -145,6 +141,7 @@ router.get('/dashboard', async (req, res) => {
                 initials: String(row.student || '').split(' ').slice(0, 2).map((part) => part.charAt(0)).join('').toUpperCase(),
                 student: row.student,
                 department: row.department,
+                graduation_yr: row.graduation_yr ? Number(row.graduation_yr) : null,
                 company: row.company,
                 packageLpa: Number(row.packageLpa || 0),
                 status: normalizeStatus(row.status)
@@ -174,7 +171,18 @@ router.get('/users', async (req, res) => {
                 CASE WHEN u.role = 'student' THEN CONCAT('ST-', LPAD(COALESCE(s.s_id, u.entity_id, 0), 4, '0')) 
                      WHEN u.role = 'coordinator' THEN CONCAT('CD-', LPAD(COALESCE(c.coord_id, u.entity_id, 0), 3, '0'))
                      ELSE COALESCE(CAST(u.entity_id AS CHAR), '') END AS entityId,
-                CASE WHEN u.role = 'student' THEN COALESCE(s.profile_status, 'Active') ELSE 'Active' END AS status,
+                CASE 
+                     WHEN u.role = 'student' THEN 
+                         CASE 
+                            WHEN s.profile_status = 'opted_out' THEN 'opted_out'
+                            WHEN s.profile_status = 'not_eligible' THEN 'not_eligible'
+                            WHEN best_pr.record_id IS NOT NULL THEN 'placed'
+                            WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'in_progress'
+                            WHEN latest_app.status = 'rejected' THEN 'rejected'
+                            ELSE 'active'
+                         END
+                     ELSE 'active' 
+                END AS status,
                 CASE WHEN u.role = 'student' THEN 'Standard' ELSE 'Elevated' END AS permission,
                 u.role,
                 0 AS lastLoginDays
@@ -182,6 +190,22 @@ router.get('/users', async (req, res) => {
             LEFT JOIN STUDENT s ON u.role = 'student' AND s.s_id = u.entity_id
             LEFT JOIN PLACEMENT_COORDINATOR c ON u.role = 'coordinator' AND c.coord_id = u.entity_id
             LEFT JOIN CGDC_ADMIN a ON u.role IN ('admin','cgdc_admin') AND a.cgdc_id = u.entity_id
+            LEFT JOIN (
+                SELECT pr1.* 
+                FROM PLACEMENT_RECORD pr1
+                JOIN (
+                    SELECT s_id, MAX(record_id) as max_id 
+                    FROM PLACEMENT_RECORD GROUP BY s_id
+                ) pr2 ON pr1.s_id = pr2.s_id AND pr1.record_id = pr2.max_id
+            ) best_pr ON s.s_id = best_pr.s_id
+            LEFT JOIN (
+                SELECT a1.* 
+                FROM APPLICATION a1
+                JOIN (
+                    SELECT s_id, MAX(app_id) as max_id 
+                    FROM APPLICATION GROUP BY s_id
+                ) a2 ON a1.s_id = a2.s_id AND a1.app_id = a2.max_id
+            ) latest_app ON s.s_id = latest_app.s_id AND best_pr.record_id IS NULL
             WHERE u.role = ?
         `, [dbRole]);
 
@@ -230,24 +254,21 @@ router.get('/records', async (req, res) => {
                 s.s_name AS student, 
                 COALESCE(s.dept, 'Unknown') AS department,
                 CASE 
-                    WHEN s.profile_status = 'opted_out' THEN '-'
+                    WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN '-'
                     WHEN best_pr.comp_id IS NOT NULL THEN COALESCE(c.comp_name, '-')
-                    WHEN latest_app.job_id IS NOT NULL THEN COALESCE(ac.comp_name, '-')
                     ELSE '-'
                 END AS company,
                 CASE 
-                    WHEN s.profile_status = 'opted_out' THEN 0
+                    WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN 0
                     WHEN best_pr.comp_id IS NOT NULL THEN best_pr.salary_offered
-                    WHEN latest_app.job_id IS NOT NULL THEN COALESCE(aj.package, 0)
                     ELSE 0
                 END AS packageLpa,
                 CASE 
                     WHEN s.profile_status = 'opted_out' THEN 'Opted Out'
                     WHEN s.profile_status = 'not_eligible' THEN 'Not Eligible'
                     WHEN best_pr.record_id IS NOT NULL THEN 'Placed'
-                    WHEN latest_app.status IN ('under_review', 'shortlisted') THEN 'In Progress'
+                    WHEN latest_app.status IN ('under_review', 'shortlisted', 'applied') THEN 'Active'
                     WHEN latest_app.status = 'rejected' THEN 'Rejected'
-                    WHEN latest_app.status = 'applied' THEN 'In Progress'
                     ELSE 'Active'
                 END AS status,
                 s.graduation_yr AS appliedYear
@@ -317,7 +338,8 @@ router.get('/analytics', async (req, res) => {
         }
 
         // KPIs
-        const [students] = await pool.query(`SELECT COUNT(*) AS count FROM STUDENT s ${studentWhere}`, appParams);
+        const studentFilter = studentWhere ? studentWhere : "";
+        const [students] = await pool.query(`SELECT COUNT(*) AS count FROM STUDENT s ${studentFilter}`, appParams);
         const [applications] = await pool.query(`SELECT COUNT(*) AS count FROM APPLICATION ${appFilterOnlyWhere}`, appParams);
         const [placed] = await pool.query(`SELECT COUNT(DISTINCT s_id) AS count FROM PLACEMENT_RECORD ${prAnd}`, appParams);
         const [maxPkg] = await pool.query(`SELECT MAX(salary_offered) AS val FROM PLACEMENT_RECORD ${prAnd}`, appParams);
@@ -524,7 +546,6 @@ router.get('/company/:id', async (req, res) => {
     }
 });
 
-<<<<<<< Updated upstream
 // --- Admin Profile ---
 router.get('/profile', async (req, res) => {
     try {
@@ -596,9 +617,15 @@ router.post('/student', async (req, res) => {
     }
 });
 
-=======
->>>>>>> Stashed changes
-function normalizeStatus(status) { const value = String(status || '').toLowerCase(); if (['selected', 'placed', 'accepted'].includes(value)) return 'placed'; if (['under_review', 'shortlisted'].includes(value)) return 'in-progress'; if (value === 'rejected') return 'rejected'; return 'in-progress'; }
+function normalizeStatus(status) {
+    const value = String(status || '').toLowerCase();
+    if (['selected', 'placed', 'accepted'].includes(value)) return 'placed';
+    if (['under_review', 'shortlisted', 'in-progress', 'applied', 'active'].includes(value)) return 'active';
+    if (value === 'rejected') return 'rejected';
+    if (value === 'opted_out') return 'opted_out';
+    if (value === 'not_eligible') return 'not_eligible';
+    return 'active';
+}
 function capitalize(text) { return String(text || '').charAt(0).toUpperCase() + String(text || '').slice(1); }
 
 // Catch-all 404 for admin routes to prevent HTML responses

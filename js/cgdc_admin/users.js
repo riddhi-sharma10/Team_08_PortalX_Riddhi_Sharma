@@ -462,7 +462,7 @@ function renderRow(user, serial) {
             <td><span class="tag ${getRoleTag(user.role)}">${user.role.toUpperCase()}</span></td>
             ${includeBranch ? `<td>${user.branch || '-'}</td>` : ''}
             <td>${user.entityId}</td>
-            <td><span class="tag ${getStatusTag(user.status)}">${user.status.toUpperCase()}</span></td>
+            <td><span class="tag ${getStatusTag(user.status)}">${formatStatusLabel(user.status)}</span></td>
         </tr>
     `;
 }
@@ -541,10 +541,20 @@ function getRoleTag(role) {
 }
 
 function getStatusTag(status) {
-    if (status === 'Active') return 'tag-success';
-    if (status === 'Pending') return 'tag-warning';
-    if (status === 'Suspended') return 'tag-danger';
+    const s = String(status).toLowerCase();
+    if (s === 'active' || s === 'placed') return 'tag-success';
+    if (s === 'active' || s === 'pending') return 'tag-warning';
+    if (s === 'rejected' || s === 'not_eligible' || s === 'suspended') return 'tag-danger';
+    if (s === 'opted_out' || s === 'inactive') return 'tag-muted';
     return 'tag-info';
+}
+
+function formatStatusLabel(status) {
+    const s = String(status).toLowerCase();
+    if (s === 'active') return 'Active';
+    if (s === 'not_eligible') return 'Not Eligible';
+    if (s === 'opted_out') return 'Opted Out';
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
 function getPageList(current, total) {
@@ -601,18 +611,25 @@ function configureFiltersForRole() {
     if (role === 'Admin') {
         if (branchField) branchField.style.display = 'none';
         if (permissionField) permissionField.style.display = 'block';
-        setSelectOptions('user-status-filter', ['all', 'Active', 'Inactive']);
+        setSelectOptions('user-status-filter', ['all', 'active', 'inactive']);
         setSelectOptions('user-permission-filter', ['all', 'Elevated']);
         state.filters.branch = 'all';
     } else if (role === 'Coordinator') {
         if (branchField) branchField.style.display = 'block';
         if (permissionField) permissionField.style.display = 'none';
-        setSelectOptions('user-status-filter', ['all', 'Active', 'Inactive']);
+        setSelectOptions('user-status-filter', ['all', 'active', 'inactive']);
         state.filters.permission = 'all';
     } else {
         if (branchField) branchField.style.display = 'block';
         if (permissionField) permissionField.style.display = 'none';
-        setSelectOptions('user-status-filter', ['all', 'Active', 'Inactive', 'Pending', 'Suspended']);
+        setSelectOptions('user-status-filter', [
+            {value: 'all', label: 'All'},
+            {value: 'active', label: 'Active'},
+            {value: 'placed', label: 'Placed'},
+            {value: 'rejected', label: 'Rejected'},
+            {value: 'opted_out', label: 'Opted Out'},
+            {value: 'not_eligible', label: 'Not Eligible'}
+        ]);
         state.filters.permission = 'all';
     }
 }
@@ -622,12 +639,15 @@ function setSelectOptions(selectId, values) {
     if (!select) return;
 
     const previous = select.value;
-    select.innerHTML = values.map((value) => {
-        const label = value === 'all' ? 'All' : value;
+    select.innerHTML = values.map((item) => {
+        const value = typeof item === 'object' ? item.value : item;
+        const label = typeof item === 'object' ? item.label : (value === 'all' ? 'All' : value.charAt(0).toUpperCase() + value.slice(1));
         return `<option value="${value}">${label}</option>`;
     }).join('');
 
-    if (values.includes(previous)) select.value = previous;
+    const valueExists = values.some(item => (typeof item === 'object' ? item.value : item) === previous);
+    if (valueExists) select.value = previous;
+    else select.value = 'all';
 }
 
 function resetFiltersForRoleSwitch() {

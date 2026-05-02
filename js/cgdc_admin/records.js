@@ -198,7 +198,7 @@ function renderPage(container, app) {
                     <select id="admin-record-status-filter" aria-label="Filter by record status">
                         <option value="all" ${recordsState.status === 'all' ? 'selected' : ''}>All Status</option>
                         <option value="Placed" ${recordsState.status === 'Placed' ? 'selected' : ''}>Placed</option>
-                        <option value="In Progress" ${recordsState.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                        <option value="Active" ${recordsState.status === 'Active' ? 'selected' : ''}>Active</option>
                         <option value="Rejected" ${recordsState.status === 'Rejected' ? 'selected' : ''}>Rejected</option>
                     </select>
 
@@ -211,7 +211,7 @@ function renderPage(container, app) {
                 <div class="admin-record-status-row">
                     ${renderStatusChip('all', 'All', allRecords.length)}
                     ${renderStatusChip('Placed', 'Placed', statusSummary.Placed)}
-                    ${renderStatusChip('In Progress', 'In Progress', statusSummary['In Progress'])}
+                    ${renderStatusChip('Active', 'Active', statusSummary['Active'])}
                     ${renderStatusChip('Rejected', 'Rejected', statusSummary.Rejected)}
                 </div>
 
@@ -306,7 +306,7 @@ function getStatusSummary(records) {
         const key = record.status;
         acc[key] = (acc[key] || 0) + 1;
         return acc;
-    }, { Placed: 0, 'In Progress': 0, Rejected: 0 });
+    }, { Placed: 0, 'Active': 0, Rejected: 0 });
 }
 
 function getPlacementRate(records) {
@@ -342,11 +342,11 @@ function renderStatusChip(status, label, count) {
 }
 
 function formatStatusLabel(status) {
-    // The API normalizes statuses to placed/in-progress/rejected
+    // The API normalizes statuses to placed/active/rejected
     if (status === 'placed') return 'Placed';
-    if (status === 'in-progress') return 'In Progress';
+    if (status === 'active') return 'Active';
     if (status === 'rejected') return 'Rejected';
-    return 'In Progress';
+    return 'Active';
 }
 
 function formatNumber(value) {
@@ -359,6 +359,6 @@ function getInitials(name) {
 
 function getStatusTag(status) {
     if (status === 'Placed') return 'tag-success';
-    if (status === 'In Progress') return 'tag-warning';
+    if (status === 'Active') return 'tag-warning';
     return 'tag-danger';
 }

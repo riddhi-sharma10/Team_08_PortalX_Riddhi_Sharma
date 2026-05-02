@@ -16,6 +16,10 @@ let data = {
 };
 
 let statusFilter = "all";
+let branchFilter = "all";
+let yearFilter = "all";
+let recordsPage = 1;
+const RECORDS_PER_PAGE = 15;
 
 /*──────────────────────────────────────────────
   ENTRY POINT
@@ -157,28 +161,43 @@ function renderShell(container) {
             <div class="card">
                 <div class="admin-card-head admin-card-head-inline">
                     <div>
-                        <h3>Recent Placement Records</h3>
-                        <span>Latest 50 outcomes from the APPLICATION table</span>
+                        <h3>Student Placement Records</h3>
+                        <span id="dash-records-subtitle">All 300 students synced from MySQL</span>
                     </div>
                     <div class="admin-table-actions">
                         <div class="admin-filter-wrap">
                             <button id="dash-filter-btn" class="admin-user-action" type="button">
                                 <ion-icon name="funnel-outline"></ion-icon> Filter
                             </button>
-                            <div id="dash-filter-panel" class="admin-filter-panel hidden" style="width:210px;">
-                                <div class="admin-filter-title">Record Status</div>
+                            <div id="dash-filter-panel" class="admin-filter-panel hidden" style="width:260px;">
+                                <div class="admin-filter-title">Filter Records</div>
                                 <div class="admin-filter-grid">
                                     <label>
                                         <span>Status</span>
-                                        <select id="dash-filter-select">
-                                            <option value="all">All</option>
-                                            <option value="in-progress">In Progress</option>
+                                        <select id="dash-filter-status">
+                                            <option value="all">All Statuses</option>
                                             <option value="placed">Placed</option>
+                                            <option value="active">Active</option>
                                             <option value="rejected">Rejected</option>
+                                            <option value="opted_out">Opted Out</option>
+                                            <option value="not_eligible">Not Eligible</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Branch / Dept</span>
+                                        <select id="dash-filter-branch">
+                                            <option value="all">All Branches</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Graduation Year</span>
+                                        <select id="dash-filter-year">
+                                            <option value="all">All Years</option>
                                         </select>
                                     </label>
                                 </div>
                                 <div class="admin-filter-actions">
+                                    <button id="dash-reset-filter" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;background:white;font-weight:600;cursor:pointer;font-size:0.85rem;">Reset</button>
                                     <button id="dash-apply-filter" class="btn-primary" type="button">Apply</button>
                                 </div>
                             </div>
@@ -199,6 +218,11 @@ function renderShell(container) {
                         </thead>
                         <tbody id="dash-records-body"></tbody>
                     </table>
+                </div>
+                <!-- Records count + pagination -->
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--bg-secondary);border-top:1px solid var(--border);font-size:0.85rem;color:var(--text-muted);">
+                    <span id="dash-records-summary"></span>
+                    <div id="dash-records-pagination" style="display:flex;gap:6px;"></div>
                 </div>
             </div>
 
@@ -293,19 +317,37 @@ function companyItemHTML(c) {
 ──────────────────────────────────────────────*/
 function populateRecordsTable() {
   const tbody = document.getElementById("dash-records-body");
+  const summary = document.getElementById("dash-records-summary");
+  const paginationEl = document.getElementById("dash-records-pagination");
   if (!tbody) return;
 
-  const rows =
-    statusFilter === "all"
-      ? data.records
-      : data.records.filter((r) => r.status === statusFilter);
+  const filtered = data.records.filter((r) => {
+    const statusOk = statusFilter === "all" || r.status === statusFilter;
+    const branchOk = branchFilter === "all" || r.department === branchFilter;
+    const yearOk   = yearFilter === "all" || String(r.graduation_yr) === String(yearFilter);
+    return statusOk && branchOk && yearOk;
+  });
 
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No records match the selected filter.</td></tr>`;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / RECORDS_PER_PAGE));
+  if (recordsPage > totalPages) recordsPage = totalPages;
+
+  const start = (recordsPage - 1) * RECORDS_PER_PAGE;
+  const pageRows = filtered.slice(start, start + RECORDS_PER_PAGE);
+
+  // Summary
+  if (summary) {
+    summary.textContent = filtered.length === 0
+      ? "No records match"
+      : `Showing ${start + 1}–${start + pageRows.length} of ${filtered.length} students`;
+  }
+
+  if (!pageRows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">No records match the selected filter.</td></tr>`;
+    if (paginationEl) paginationEl.innerHTML = '';
     return;
   }
 
-  tbody.innerHTML = rows
+  tbody.innerHTML = pageRows
     .map(
       (r) => `
         <tr>
@@ -316,13 +358,45 @@ function populateRecordsTable() {
                 </div>
             </td>
             <td>${r.department}</td>
-            <td>${r.company}</td>
-            <td>${Number(r.packageLpa).toFixed(1)}</td>
+            <td>${noPlacementStatus(r.status) ? '-' : r.company}</td>
+            <td>${noPlacementStatus(r.status) || r.packageLpa === 0 ? '-' : Number(r.packageLpa).toFixed(1)}</td>
             <td><span class="tag ${statusTag(r.status)}">${statusLabel(r.status)}</span></td>
         </tr>
     `,
     )
     .join("");
+
+  // Pagination
+  if (paginationEl) {
+    if (totalPages <= 1) {
+      paginationEl.innerHTML = '';
+    } else {
+      const btnStyle = (active) =>
+        `style="padding:4px 10px;border-radius:5px;border:1px solid var(--border);background:${active ? 'var(--primary)' : 'white'};color:${active ? 'white' : 'var(--text-main)'};font-weight:600;cursor:pointer;font-size:0.82rem;"`;
+
+      const pages = [];
+      pages.push(`<button data-rpage="prev" ${recordsPage === 1 ? 'disabled' : ''} ${btnStyle(false)}>‹</button>`);
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || Math.abs(i - recordsPage) <= 1) {
+          pages.push(`<button data-rpage="${i}" ${btnStyle(i === recordsPage)}>${i}</button>`);
+        } else if (Math.abs(i - recordsPage) === 2) {
+          pages.push(`<span style="padding:0 4px;">…</span>`);
+        }
+      }
+      pages.push(`<button data-rpage="next" ${recordsPage === totalPages ? 'disabled' : ''} ${btnStyle(false)}>›</button>`);
+      paginationEl.innerHTML = pages.join('');
+
+      paginationEl.querySelectorAll('button[data-rpage]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const p = btn.dataset.rpage;
+          if (p === 'prev' && recordsPage > 1) recordsPage--;
+          else if (p === 'next' && recordsPage < totalPages) recordsPage++;
+          else if (!isNaN(Number(p))) recordsPage = Number(p);
+          populateRecordsTable();
+        });
+      });
+    }
+  }
 }
 
 /*──────────────────────────────────────────────
@@ -455,19 +529,60 @@ function drawCharts() {
   EVENT WIRING
 ──────────────────────────────────────────────*/
 function wireEvents(app) {
-  const filterBtn = document.getElementById("dash-filter-btn");
+  const filterBtn   = document.getElementById("dash-filter-btn");
   const filterPanel = document.getElementById("dash-filter-panel");
-  const filterSel = document.getElementById("dash-filter-select");
-  const applyBtn = document.getElementById("dash-apply-filter");
-  const viewAllBtn = document.getElementById("dash-view-all-cos");
+  const statusSel   = document.getElementById("dash-filter-status");
+  const branchSel   = document.getElementById("dash-filter-branch");
+  const yearSel     = document.getElementById("dash-filter-year");
+  const applyBtn    = document.getElementById("dash-apply-filter");
+  const resetBtn    = document.getElementById("dash-reset-filter");
+  const viewAllBtn  = document.getElementById("dash-view-all-cos");
+
+  // Populate dynamic Branch options from data
+  const branches = [...new Set(data.records.map(r => r.department).filter(Boolean))].sort();
+  if (branchSel) {
+    branches.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b; opt.textContent = b;
+      branchSel.appendChild(opt);
+    });
+  }
+
+  // Populate dynamic Year options from data
+  const years = [...new Set(data.records.map(r => r.graduation_yr).filter(Boolean))].sort((a,b) => b - a);
+  if (yearSel) {
+    years.forEach(y => {
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = y;
+      yearSel.appendChild(opt);
+    });
+  }
 
   filterBtn?.addEventListener("click", () => {
-    if (filterSel) filterSel.value = statusFilter;
+    // Sync selects to current state
+    if (statusSel) statusSel.value = statusFilter;
+    if (branchSel) branchSel.value = branchFilter;
+    if (yearSel)   yearSel.value   = yearFilter;
     filterPanel?.classList.toggle("hidden");
   });
 
   applyBtn?.addEventListener("click", () => {
-    statusFilter = filterSel?.value || "all";
+    statusFilter = statusSel?.value || "all";
+    branchFilter = branchSel?.value || "all";
+    yearFilter   = yearSel?.value   || "all";
+    recordsPage  = 1;
+    filterPanel?.classList.add("hidden");
+    populateRecordsTable();
+  });
+
+  resetBtn?.addEventListener("click", () => {
+    statusFilter = "all";
+    branchFilter = "all";
+    yearFilter   = "all";
+    recordsPage  = 1;
+    if (statusSel) statusSel.value = "all";
+    if (branchSel) branchSel.value = "all";
+    if (yearSel)   yearSel.value   = "all";
     filterPanel?.classList.add("hidden");
     populateRecordsTable();
   });
@@ -495,16 +610,21 @@ function fmt(n) {
 
 function statusTag(s) {
   if (s === "placed") return "tag-success";
-  if (s === "in-progress") return "tag-warning";
+  if (s === "active") return "tag-warning";
   if (s === "rejected") return "tag-danger";
-  if (s === "opted_out") return "tag-info";
+  if (s === "opted_out") return "tag-muted";
   if (s === "not_eligible") return "tag-danger";
   return "tag-info";
 }
 
 function statusLabel(s) {
-  if (s === "in-progress") return "IN PROGRESS";
+  if (s === "active") return "ACTIVE";
   if (s === "opted_out") return "OPTED OUT";
   if (s === "not_eligible") return "NOT ELIGIBLE";
   return String(s).toUpperCase();
+}
+
+// Returns true for statuses that have no associated company/package data
+function noPlacementStatus(s) {
+  return s === "opted_out" || s === "not_eligible" || s === "active";
 }
