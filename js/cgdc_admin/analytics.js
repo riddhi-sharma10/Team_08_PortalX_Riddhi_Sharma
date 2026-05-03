@@ -125,21 +125,6 @@ function renderUi(container, app) {
                 </div>
             </div>
 
-            <div class="card">
-                <h3 style="margin-bottom: 14px; color:#0f2f61;">Department Performance Snapshot</h3>
-                <div class="data-table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Department</th>
-                                <th>Placement %</th>
-                                <th>Average Package (LPA)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="analytics-dept-table"></tbody>
-                    </table>
-                </div>
-            </div>
         </div>
     `;
 
@@ -175,7 +160,6 @@ function updateAnalyticsView() {
   );
   setText("kpi-applications", formatNumber(analyticsData.kpis.applications));
 
-  renderDepartmentTable(analyticsData.departments);
   renderInsights(analyticsData.insights);
   renderCharts(analyticsData);
 }
@@ -184,23 +168,6 @@ function renderInsights(insights) {
   const list = document.getElementById("analytics-insights");
   if (!list) return;
   list.innerHTML = insights.map((point) => `<li>${point}</li>`).join("");
-}
-
-function renderDepartmentTable(rows) {
-  const tbody = document.getElementById("analytics-dept-table");
-  if (!tbody) return;
-
-  tbody.innerHTML = rows
-    .map(
-      (row) => `
-        <tr>
-            <td>${row.name}</td>
-            <td>${row.placementPct}%</td>
-            <td>${row.avgLpa.toFixed(1)}</td>
-        </tr>
-    `,
-    )
-    .join("");
 }
 
 function renderCharts(data) {

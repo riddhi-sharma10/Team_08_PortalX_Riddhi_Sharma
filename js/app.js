@@ -44,16 +44,7 @@ const App = {
             }
         };
 
-        // Re-fetch on window focus (e.g., coming back from another app)
-        const handleFocus = () => {
-            if (this.state.user && !isModalOpen()) {
-                console.log('[TabSync] Window focused — refreshing data');
-                this.navigateTo(this.state.currentPage);
-            }
-        };
-
         document.addEventListener('visibilitychange', handleVisibility);
-        window.addEventListener('focus', handleFocus);
 
         // Also auto-refresh every 30 seconds while tab is open
         setInterval(() => {

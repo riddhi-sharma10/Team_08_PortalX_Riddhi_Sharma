@@ -12,14 +12,14 @@ export async function render(container, app) {
         allStudents = await api.get('/coordinator/students');
         console.log('[students] count:', allStudents.length);
         filtered = [...allStudents];
-        renderShell(container);
+        renderShell(container, app);
     } catch (err) {
         console.error('[students] error:', err);
         container.innerHTML = errorHTML(err.message);
     }
 }
 
-function renderShell(container) {
+function renderShell(container, app) {
     container.innerHTML = `
         <div class="admin-dashboard-shell">
             <div class="admin-dashboard-header">
@@ -62,6 +62,7 @@ function renderShell(container) {
                                 <th>CGPA</th>
                                 <th>Grad Year</th>
                                 <th>Status</th>
+                                <th style="text-align:right;">Action</th>
                             </tr>
                         </thead>
                         <tbody id="stu-tbody">
@@ -73,7 +74,7 @@ function renderShell(container) {
         </div>
     `;
 
-    wireEvents(container);
+    wireEvents(container, app);
 }
 
 function tableRows() {
@@ -96,11 +97,16 @@ function tableRows() {
             <td><b>${s.cgpa}</b></td>
             <td>${s.gradYear}</td>
             <td><span class="tag ${statusTag(s.status)}">${s.status.replace('_',' ').toUpperCase()}</span></td>
+            <td style="text-align:right;">
+                <button class="student-profile-btn" data-id="${s.id}" style="background:transparent;border:none;color:var(--primary);font-weight:600;cursor:pointer;font-size:0.85rem;display:flex;align-items:center;gap:4px;margin-left:auto;">
+                    View Profile <ion-icon name="arrow-forward-outline"></ion-icon>
+                </button>
+            </td>
         </tr>
     `).join('');
 }
 
-function wireEvents(container) {
+function wireEvents(container, app) {
     const searchInp  = container.querySelector('#stu-search');
     const filterBtn  = container.querySelector('#filter-btn');
     const filterPanel= container.querySelector('#filter-panel');
@@ -128,6 +134,17 @@ function wireEvents(container) {
             filterPanel?.classList.add('hidden');
         }
     }, { once: false });
+
+    // Handle View Profile Clicks
+    container.addEventListener('click', e => {
+        const btn = e.target.closest('.student-profile-btn');
+        if (btn) {
+            const studentId = btn.dataset.id;
+            sessionStorage.setItem('selectedStudentId', studentId);
+            sessionStorage.setItem('profileOrigin', 'students');
+            app.navigateTo('student_profile');
+        }
+    });
 }
 
 function applyFilters() {
