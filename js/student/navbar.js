@@ -10,6 +10,7 @@ export const Navbar = {
         const cleanName = user.name.replace(/^User\s+/i, '');
         
         navbar.innerHTML = `
+            <ion-icon name="menu-outline" class="mobile-menu-btn" id="mobile-menu-toggle"></ion-icon>
             <div class="search-bar">
                 <ion-icon name="search-outline"></ion-icon>
                 <input type="text" placeholder="Search for jobs, companies or students...">

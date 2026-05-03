@@ -83,5 +83,35 @@ export const api = {
         try { data = JSON.parse(text); } catch (e) { throw new Error('Server returned an invalid response.'); }
         if (!response.ok) throw new Error(data.error || data.message || 'Request failed');
         return data;
+    },
+
+    // Establish Server-Sent Events (SSE) connection for Real-Time Sync
+    initSSE: (userId) => {
+        if (window._sseStream) {
+            window._sseStream.close();
+        }
+        
+        const stream = new EventSource(`${BASE_URL}/stream?userId=${encodeURIComponent(userId)}`);
+        
+        stream.addEventListener('new_message', (e) => {
+            console.log('[SSE] New Message received:', e.data);
+            window.dispatchEvent(new CustomEvent('sse:new_message', { detail: JSON.parse(e.data) }));
+            // Trigger Navbar update
+            if (window.App && window.App.Navbar) window.App.Navbar.updateBadges();
+        });
+
+        stream.addEventListener('new_notification', (e) => {
+            console.log('[SSE] New Notification received:', e.data);
+            window.dispatchEvent(new CustomEvent('sse:new_notification', { detail: JSON.parse(e.data) }));
+            // Trigger Navbar update
+            if (window.App && window.App.Navbar) window.App.Navbar.updateBadges();
+        });
+
+        stream.onerror = (err) => {
+            console.error('[SSE] Connection Error', err);
+        };
+
+        window._sseStream = stream;
+        return stream;
     }
 };

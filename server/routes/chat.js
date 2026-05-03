@@ -51,6 +51,12 @@ router.post('/send', async (req, res) => {
             VALUES (?, ?, ?, ?, 'message')
         `, [receiver_id, r_role, 'New Message', `You have a new message from ${senderName}`]);
 
+        // Trigger real-time push via SSE
+        import('../sse.js').then(({ notifyUser }) => {
+            notifyUser(receiver_id, 'new_message', { sender_id, message_text });
+            notifyUser(receiver_id, 'new_notification', { title: 'New Message', content: `You have a new message from ${senderName}` });
+        }).catch(err => console.error("SSE Error:", err));
+
         res.json({ success: true, msg_id: result.insertId });
     } catch (err) {
         console.error('[Chat] Send Error:', err);
@@ -69,7 +75,7 @@ router.get('/conversations', async (req, res) => {
                 MAX(convs.created_at) as last_msg,
                 (SELECT COUNT(*) FROM CHAT_MESSAGE 
                  WHERE sender_id = convs.other_user AND receiver_id = ? AND is_read = FALSE) as unread_count,
-                COALESCE(s.s_name, pc.name, adm.name, convs.other_user) as other_name
+                MAX(COALESCE(s.s_name, pc.name, adm.name, convs.other_user)) as other_name
             FROM (
                 SELECT 
                     CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END AS other_user,
@@ -78,10 +84,10 @@ router.get('/conversations', async (req, res) => {
                 FROM CHAT_MESSAGE
                 WHERE sender_id = ? OR receiver_id = ?
             ) as convs
-            LEFT JOIN STUDENT s ON s.email = convs.other_user
-            LEFT JOIN PLACEMENT_COORDINATOR pc ON pc.email = convs.other_user
-            LEFT JOIN CGDC_ADMIN adm ON adm.email = convs.other_user
-            GROUP BY convs.other_user, convs.other_role, other_name
+            LEFT JOIN STUDENT s ON s.email COLLATE utf8mb4_unicode_ci = convs.other_user COLLATE utf8mb4_unicode_ci OR CAST(s.s_id AS CHAR) COLLATE utf8mb4_unicode_ci = convs.other_user COLLATE utf8mb4_unicode_ci
+            LEFT JOIN PLACEMENT_COORDINATOR pc ON pc.email COLLATE utf8mb4_unicode_ci = convs.other_user COLLATE utf8mb4_unicode_ci OR CAST(pc.coord_id AS CHAR) COLLATE utf8mb4_unicode_ci = convs.other_user COLLATE utf8mb4_unicode_ci
+            LEFT JOIN CGDC_ADMIN adm ON adm.email COLLATE utf8mb4_unicode_ci = convs.other_user COLLATE utf8mb4_unicode_ci OR CAST(adm.cgdc_id AS CHAR) COLLATE utf8mb4_unicode_ci = convs.other_user COLLATE utf8mb4_unicode_ci
+            GROUP BY convs.other_user, convs.other_role
             ORDER BY last_msg DESC
         `, [userId, userId, userId, userId, userId]);
 

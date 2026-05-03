@@ -176,12 +176,18 @@ router.patch('/applications/:id/status', async (req, res) => {
                     const d = details[0];
                     const statusMap = { shortlisted: 'Shortlisted', rejected: 'Rejected', selected: 'Selected', under_review: 'Under Review' };
                     const label = statusMap[status] || status;
+                    const title = `Application ${label}`;
+                    const content = `Your application for ${d.role} at ${d.comp_name} has been ${label.toLowerCase()}.`;
+                    
                     await conn.query(
                         `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'student', ?, ?, ?)`,
-                        [d.stu_email, `Application ${label}`,
-                         `Your application for ${d.role} at ${d.comp_name} has been ${label.toLowerCase()}.`,
-                         status === 'rejected' ? 'alert' : 'system']
+                        [d.stu_email, title, content, status === 'rejected' ? 'alert' : 'system']
                     );
+
+                    // Push Real-time
+                    import('../sse.js').then(({ notifyUser }) => {
+                        notifyUser(d.stu_email, 'new_notification', { title, content });
+                    }).catch(err => console.error("SSE Error:", err));
                 }
             } catch (nErr) {
                 console.warn('[Notif] Failed to notify student on status change:', nErr.message);
@@ -202,14 +208,20 @@ router.patch('/applications/:id/status', async (req, res) => {
                         const d = info[0];
                         const statusMap = { shortlisted: 'Shortlisted', rejected: 'Rejected', selected: 'Selected' };
                         const label = statusMap[status];
+                        const title = `Student ${label}`;
+                        const content = `${d.s_name} (${d.dept}) — ${d.role} at ${d.comp_name} has been ${label.toLowerCase()}.`;
+
                         const [admins] = await conn.query('SELECT email FROM CGDC_ADMIN');
                         for (const admin of admins) {
                             await conn.query(
                                 `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'admin', ?, ?, ?)`,
-                                [admin.email, `Student ${label}`,
-                                 `${d.s_name} (${d.dept}) — ${d.role} at ${d.comp_name} has been ${label.toLowerCase()}.`,
-                                 status === 'rejected' ? 'alert' : 'system']
+                                [admin.email, title, content, status === 'rejected' ? 'alert' : 'system']
                             );
+                            
+                            // Push Real-time
+                            import('../sse.js').then(({ notifyUser }) => {
+                                notifyUser(admin.email, 'new_notification', { title, content });
+                            }).catch(err => console.error("SSE Error:", err));
                         }
                     }
                 }

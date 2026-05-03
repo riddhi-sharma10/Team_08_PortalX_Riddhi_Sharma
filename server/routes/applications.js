@@ -93,11 +93,17 @@ router.post('/', requireAuth, async (req, res) => {
                  WHERE s.s_id = ?`, [job_id, student_id]
             );
             if (stuInfo.length > 0 && stuInfo[0].coord_email) {
+                const title = 'New Application';
+                const content = `${stuInfo[0].s_name} applied for ${stuInfo[0].role} at ${stuInfo[0].comp_name}`;
                 await pool.query(
                     `INSERT INTO NOTIFICATION (user_id, user_role, title, content, type) VALUES (?, 'coordinator', ?, ?, 'alert')`,
-                    [stuInfo[0].coord_email, 'New Application',
-                     `${stuInfo[0].s_name} applied for ${stuInfo[0].role} at ${stuInfo[0].comp_name}`]
+                    [stuInfo[0].coord_email, title, content]
                 );
+                
+                // Trigger real-time push via SSE
+                import('../sse.js').then(({ notifyUser }) => {
+                    notifyUser(stuInfo[0].coord_email, 'new_notification', { title, content });
+                }).catch(err => console.error("SSE Error:", err));
             }
         } catch (notifErr) {
             console.warn('[Notif] Failed to notify coordinator:', notifErr.message);

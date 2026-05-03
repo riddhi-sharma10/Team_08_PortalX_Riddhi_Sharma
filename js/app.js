@@ -12,8 +12,22 @@ const App = {
     init() {
         console.log("Placement Portal Initialized");
         this.setupResizer();
+        this.setupMobileMenu();
         this.checkAuth();
         this.setupTabSync();
+    },
+
+    setupMobileMenu() {
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#mobile-menu-toggle')) {
+                document.getElementById('sidebar')?.classList.add('active');
+                document.getElementById('sidebar-overlay')?.classList.add('active');
+            } else if (e.target.closest('#sidebar-overlay') || e.target.closest('.nav-item')) {
+                // Close sidebar when overlay is clicked, or when a navigation item is clicked
+                document.getElementById('sidebar')?.classList.remove('active');
+                document.getElementById('sidebar-overlay')?.classList.remove('active');
+            }
+        });
     },
 
     setupTabSync() {
@@ -162,6 +176,12 @@ const App = {
         this.Sidebar.render(this.state.role, this);
         this.Navbar.render(this.state.user);
         
+        // Start Real-Time Sync (SSE)
+        const userId = this.state.user.email || this.state.user.id;
+        import('./api.js').then(({ api }) => {
+            api.initSSE(userId);
+        });
+
         // Load saved page or default to dashboard
         const savedPage = sessionStorage.getItem('current_page');
         this.navigateTo(savedPage || 'dashboard');

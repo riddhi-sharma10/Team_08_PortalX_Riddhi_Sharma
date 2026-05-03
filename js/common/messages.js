@@ -28,8 +28,22 @@ export async function render(container, app) {
     }
 
     renderShell(container);
+    injectStyles();
     await loadData();
     startPolling();
+    
+    // Listen for SSE real-time events
+    state.onNewMessage = async (e) => {
+        console.log('[Chat] Real-time message received', e.detail);
+        await loadData();
+        populateConversations();
+        if (state.activeUserId === e.detail.sender_id || state.activeUserId === e.detail.receiver_id) {
+            await loadMessages();
+            renderChatWindow();
+            scrollToBottom();
+        }
+    };
+    window.addEventListener('sse:new_message', state.onNewMessage);
     
     populateConversations();
     if (state.activeUserId) {
@@ -40,9 +54,9 @@ export async function render(container, app) {
 
 function renderShell(container) {
     container.innerHTML = `
-        <div class="chat-portal-shell" style="display: grid; grid-template-columns: 350px 1fr; height: calc(100vh - 120px); background: var(--white); border-radius: 24px; border: 1px solid var(--border); box-shadow: var(--shadow-md); overflow: hidden; animation: fadeIn 0.4s ease;">
-            
-            <div style="border-right: 1px solid var(--border); display: flex; flex-direction: column; background: #fcfcfd;">
+        <div class="chat-portal-shell" id="chat-shell">
+            <!-- Left Sidebar -->
+            <div class="chat-sidebar" id="chat-sidebar">
                 <div style="padding: 24px; border-bottom: 1px solid var(--border); background: white;">
                     <h1 style="margin: 0; font-size: 1.5rem; color: var(--primary);">Messages</h1>
                     <p style="margin: 4px 0 0; color: var(--text-muted); font-size: 0.85rem;">Connect with your campus network</p>
@@ -55,7 +69,8 @@ function renderShell(container) {
                 </div>
             </div>
 
-            <div id="chat-window-container" style="display: flex; flex-direction: column; background: white;">
+            <!-- Right Chat Window -->
+            <div class="chat-main" id="chat-window-container">
                 <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); text-align: center; padding: 40px;">
                     <div>
                         <div style="width: 80px; height: 80px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 2.5rem; color: #94a3b8;">
@@ -69,6 +84,67 @@ function renderShell(container) {
         </div>
         <input type="file" id="chat-file-input" style="display: none;" multiple>
     `;
+}
+
+function injectStyles() {
+    if (document.getElementById('chat-responsive-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'chat-responsive-styles';
+    style.innerHTML = `
+        .chat-portal-shell {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            height: calc(100vh - 145px); /* Adjusted to fit exactly within page padding */
+            background: var(--white);
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+            animation: fadeIn 0.4s ease;
+        }
+        .chat-sidebar {
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            background: #fcfcfd;
+            transition: all 0.3s ease;
+            min-height: 0;
+        }
+        .chat-main {
+            display: flex;
+            flex-direction: column;
+            background: white;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            min-height: 0;
+        }
+        @media (max-width: 900px) {
+            .chat-portal-shell {
+                grid-template-columns: 1fr;
+                border-radius: 0;
+                height: calc(100vh - 105px); /* Adjusted for mobile padding */
+            }
+            .chat-sidebar {
+                display: flex;
+            }
+            .chat-main {
+                display: none;
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 100;
+            }
+            .chat-portal-shell.chat-active .chat-sidebar {
+                display: none;
+            }
+            .chat-portal-shell.chat-active .chat-main {
+                display: flex;
+            }
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 async function loadData() {
@@ -132,6 +208,10 @@ function populateConversations() {
             state.activeUserId = item.dataset.id;
             state.activeUserRole = item.dataset.role;
             state.activeUserName = item.dataset.name;
+            
+            // Add active class for mobile
+            document.getElementById('chat-shell')?.classList.add('chat-active');
+            
             populateConversations();
             await loadMessages();
             renderChatWindow();
@@ -154,12 +234,16 @@ function renderChatWindow() {
     const container = document.getElementById('chat-window-container');
     if (!container) return;
 
-    const displayName = state.activeUserName || state.activeUserId;
+    const rawName = state.activeUserName || state.activeUserId || 'User';
+    const displayName = rawName.includes('@') ? rawName.split('@')[0] : rawName;
 
     container.innerHTML = `
         <!-- Chat Header -->
         <div style="padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: white; z-index: 10;">
             <div style="display: flex; align-items: center; gap: 12px;">
+                <button id="chat-back-btn" style="display: none; background: none; border: none; font-size: 1.5rem; color: var(--primary); cursor: pointer; padding: 0; margin-right: 8px;">
+                    <ion-icon name="arrow-back-outline"></ion-icon>
+                </button>
                 <div style="width: 44px; height: 44px; border-radius: 12px; background: #eff6ff; color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size:1.1rem;">
                     ${displayName.charAt(0).toUpperCase()}
                 </div>
@@ -171,11 +255,15 @@ function renderChatWindow() {
                     </div>
                 </div>
             </div>
-            <!-- UI CLEANUP: Removed Call/Video buttons as requested -->
+            <style>
+                @media (max-width: 900px) {
+                    #chat-back-btn { display: block !important; }
+                }
+            </style>
         </div>
 
         <!-- Messages Area -->
-        <div id="messages-display" style="flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; background: #f8fafc;">
+        <div id="messages-display" style="flex: 1; min-height: 0; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; background: #f8fafc;">
             ${state.messages.map(msg => renderMessageItem(msg)).join('')}
             <div id="messages-bottom"></div>
         </div>
@@ -193,6 +281,13 @@ function renderChatWindow() {
             </form>
         </div>
     `;
+    // Back button for mobile
+    const backBtn = document.getElementById('chat-back-btn');
+    if (backBtn) {
+        backBtn.onclick = () => {
+            document.getElementById('chat-shell')?.classList.remove('chat-active');
+        };
+    }
 
     // Wire up events
     document.getElementById('chat-form').addEventListener('submit', async (e) => {
@@ -276,6 +371,7 @@ function startPolling() {
 
 export function cleanup() {
     if (state.pollInterval) clearInterval(state.pollInterval);
+    if (state.onNewMessage) window.removeEventListener('sse:new_message', state.onNewMessage);
 }
 
 function scrollToBottom() {

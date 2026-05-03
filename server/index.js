@@ -56,6 +56,19 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend is running!' });
 });
 
+import { addClient } from './sse.js';
+app.get('/api/stream', (req, res) => {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).send('Missing userId');
+    
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders(); // Establish SSE with client
+
+    addClient(userId, res);
+});
+
 // START SERVER
 const PORT = process.env.PORT || 3001;
 
