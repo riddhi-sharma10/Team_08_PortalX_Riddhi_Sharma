@@ -28,14 +28,14 @@ const QUERY_REGISTRY = {
         name: 'My Students',
         category: 'table',
         sql: "SELECT s_id as stu_roll_no, s_name, dept, cgpa, profile_status FROM STUDENT WHERE coord_id = ? AND profile_status = 'placed' ORDER BY dept ASC, s_name ASC",
-        roles: ['coordinator', 'admin'],
+        roles: ['coordinator'],
         description: 'List of placed students specifically assigned to your care.'
     },
     'tbl_roles': {
         name: 'System User Roles',
         category: 'table',
         sql: 'SELECT role_id, username, role, entity_id FROM USER_ROLE',
-        roles: ['admin'],
+        roles: [],
         description: 'Master list of login accounts and their assigned system roles.'
     },
     'tbl_visit_history': {
@@ -51,6 +51,53 @@ const QUERY_REGISTRY = {
         sql: 'SELECT * FROM JOB_PROFILE ORDER BY app_deadline DESC',
         roles: ['student', 'coordinator', 'admin'],
         description: 'Detailed list of all job profiles posted by companies.'
+    },
+    'tbl_admin_students': {
+        name: 'All Students (Master)',
+        category: 'table',
+        sql: `
+            SELECT pc.name as coordinator_name, s.* 
+            FROM STUDENT s
+            LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            ORDER BY s.s_name ASC
+        `,
+        roles: ['admin'],
+        description: 'Admin-only view of the full student database with assigned coordinator names.'
+    },
+    'tbl_admin_companies': {
+        name: 'All Companies (Master)',
+        category: 'table',
+        sql: 'SELECT * FROM COMPANY ORDER BY comp_name ASC',
+        roles: ['admin'],
+        description: 'Admin-only view of the complete registered company list.'
+    },
+    'tbl_admin_cgdc': {
+        name: 'CGDC Admin Directory',
+        category: 'table',
+        sql: 'SELECT * FROM CGDC_ADMIN',
+        roles: ['admin'],
+        description: 'Internal list of placement cell administrators.'
+    },
+    'tbl_admin_visit_history': {
+        name: 'Master Visit History',
+        category: 'table',
+        sql: 'SELECT * FROM COMPANY_VISIT_HISTORY ORDER BY academic_year DESC',
+        roles: [],
+        description: 'Full historical visit records for administrative audit.'
+    },
+    'tbl_admin_placement_records': {
+        name: 'All Placement Records',
+        category: 'table',
+        sql: 'SELECT * FROM PLACEMENT_RECORD ORDER BY academic_year DESC',
+        roles: ['admin'],
+        description: 'Complete log of every placement record in the system.'
+    },
+    'tbl_admin_coordinators': {
+        name: 'Placement Coordinator Directory',
+        category: 'table',
+        sql: 'SELECT * FROM PLACEMENT_COORDINATOR ORDER BY name ASC',
+        roles: ['admin'],
+        description: 'Full master list of all active placement coordinators.'
     },
 
     // --- VIEWS (Simplified Abstractions) ---
@@ -172,6 +219,69 @@ const QUERY_REGISTRY = {
         roles: ['student', 'coordinator', 'admin'],
         description: 'Real-time list of all job profiles currently accepting applications.'
     },
+    'vw_admin_ineligible': {
+        name: 'Ineligible Students',
+        category: 'view',
+        sql: 'SELECT * FROM vw_students_not_eligible',
+        roles: ['admin'],
+        description: 'Students who do not meet the minimum criteria for current placement opportunities.'
+    },
+    'vw_admin_opted_out': {
+        name: 'Opted Out Students',
+        category: 'view',
+        sql: 'SELECT * FROM vw_students_opted_out',
+        roles: ['admin'],
+        description: 'Students who have chosen not to participate in the placement process.'
+    },
+    'vw_admin_selected': {
+        name: 'Selected Candidates',
+        category: 'view',
+        sql: 'SELECT * FROM vw_selected_candidates',
+        roles: ['admin'],
+        description: 'Master list of all students who have successfully secured job offers.'
+    },
+    'vw_admin_shortlisted': {
+        name: 'Shortlisted Candidates',
+        category: 'view',
+        sql: 'SELECT * FROM vw_shortlisted_candidates',
+        roles: ['admin'],
+        description: 'Students who have passed initial screening and are in the interview pipeline.'
+    },
+    'vw_admin_app_stats': {
+        name: 'Global Student App Stats',
+        category: 'view',
+        sql: 'SELECT * FROM vw_student_application_stats',
+        roles: ['admin'],
+        description: 'Comprehensive application metrics for the entire student population.'
+    },
+    'vw_admin_placement_status': {
+        name: 'All Student Placement Status',
+        category: 'view',
+        sql: 'SELECT * FROM vw_student_placement_status',
+        roles: ['admin'],
+        description: 'Real-time tracking of placement eligibility and results across all departments.'
+    },
+    'vw_admin_skills': {
+        name: 'Student Skills Summary',
+        category: 'view',
+        sql: 'SELECT * FROM vw_student_skills_summary',
+        roles: ['admin'],
+        description: 'Aggregated view of technical skills and certifications across the student body.'
+    },
+    'vw_admin_cgpa_range': {
+        name: 'Students by CGPA Range',
+        category: 'view',
+        sql: 'SELECT * FROM vw_students_by_cgpa_range',
+        roles: ['admin'],
+        description: 'Statistical breakdown of academic performance across different CGPA brackets.'
+    },
+    'vw_admin_dept_stats': {
+        name: 'Students by Department',
+        category: 'view',
+        sql: 'SELECT * FROM vw_students_by_dept',
+        roles: ['admin'],
+        description: 'Distribution of students across various academic branches.'
+    },
     'vw_student_app_stats': {
         name: 'My Application Statistics',
         category: 'view',
@@ -233,11 +343,102 @@ const QUERY_REGISTRY = {
         roles: ['admin'],
         description: 'Centralized view connecting students, companies, and coordinators for global oversight.'
     },
+    'vw_admin_overall_summary': {
+        name: 'Placement Overall Summary',
+        category: 'view',
+        sql: 'SELECT * FROM vw_placement_overall_summary',
+        roles: ['admin'],
+        description: 'High-level snapshot of total placements, offers, and recruitment metrics.'
+    },
+    'vw_admin_placement_rate': {
+        name: 'Placement Rate per Dept',
+        category: 'view',
+        sql: 'SELECT * FROM vw_placement_rate_per_dept',
+        roles: ['admin'],
+        description: 'Percentage-based analysis of placement success across different branches.'
+    },
+    'vw_admin_placements_dept': {
+        name: 'Placements by Department',
+        category: 'view',
+        sql: 'SELECT * FROM vw_placements_by_dept',
+        roles: ['admin'],
+        description: 'Detailed count of student placements categorized by their academic department.'
+    },
+    'vw_admin_placements_year': {
+        name: 'Placements by Year',
+        category: 'view',
+        sql: 'SELECT * FROM vw_placements_by_year',
+        roles: ['admin'],
+        description: 'Historical trend analysis showing recruitment volume across different academic years.'
+    },
+    'vw_admin_placed_details': {
+        name: 'Master Placed Students List',
+        category: 'view',
+        sql: 'SELECT * FROM vw_placed_students_details',
+        roles: ['admin'],
+        description: 'Detailed student-by-student view of every successful placement recorded.'
+    },
+    'vw_admin_app_full': {
+        name: 'Master Application Log',
+        category: 'view',
+        sql: 'SELECT * FROM vw_application_full_details',
+        roles: ['admin'],
+        description: 'Full log of all student applications with status and company info.'
+    },
+    'vw_admin_apps_status': {
+        name: 'Applications by Status',
+        category: 'view',
+        sql: 'SELECT * FROM vw_applications_by_status',
+        roles: ['admin'],
+        description: 'Global breakdown of applications into Accepted, Pending, and Rejected categories.'
+    },
+    'vw_admin_apps_company': {
+        name: 'Applications per Company',
+        category: 'view',
+        sql: 'SELECT * FROM vw_applications_per_company',
+        roles: ['admin'],
+        description: 'Analyzes which companies are attracting the most interest from students.'
+    },
+    'vw_admin_apps_job': {
+        name: 'Applications per Job',
+        category: 'view',
+        sql: 'SELECT * FROM vw_applications_per_job',
+        roles: ['admin'],
+        description: 'Detailed analysis of application volume for individual job profiles.'
+    },
+    'vw_admin_apps_student': {
+        name: 'Applications per Student',
+        category: 'view',
+        sql: 'SELECT * FROM vw_applications_per_student',
+        roles: ['admin'],
+        description: 'Identifies student engagement levels based on total applications submitted.'
+    },
+    'vw_admin_avg_ats': {
+        name: 'Average ATS by Dept',
+        category: 'view',
+        sql: 'SELECT * FROM vw_avg_ats_by_dept',
+        roles: ['admin'],
+        description: 'Measures departmental resume quality through aggregated ATS score benchmarks.'
+    },
+    'vw_admin_avg_salary_company': {
+        name: 'Avg Salary per Company',
+        category: 'view',
+        sql: 'SELECT * FROM vw_avg_salary_per_company',
+        roles: ['admin'],
+        description: 'Benchmarks the compensation levels offered by different participating firms.'
+    },
+    'vw_admin_avg_salary_dept': {
+        name: 'Avg Salary per Dept',
+        category: 'view',
+        sql: 'SELECT * FROM vw_avg_salary_per_dept',
+        roles: ['admin'],
+        description: 'Comparison of financial placement success across different academic branches.'
+    },
     'vw_readiness': {
         name: 'Departmental Readiness Report',
         category: 'view',
         sql: "SELECT * FROM vw_student_readiness WHERE (coord_id = ? OR 'admin' = ?)",
-        roles: ['coordinator', 'admin'],
+        roles: ['coordinator'],
         description: 'Analyzes which students meet criteria but haven\'t secured a placement yet.'
     },
 
@@ -255,6 +456,18 @@ const QUERY_REGISTRY = {
         roles: ['student'],
         description: '3-Way Join tracking your personal progress across different company applications.'
     },
+    'join_admin_student_master': {
+        name: 'Master Student Directory (with Coordinators)',
+        category: 'join',
+        sql: `
+            SELECT pc.name as coordinator_name, pc.dept as coordinator_dept, s.*
+            FROM STUDENT s
+            LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            ORDER BY s.s_name ASC
+        `,
+        roles: ['admin'],
+        description: 'Global master view connecting every student with their assigned placement coordinator details.'
+    },
     'vw_applicant_details': {
         name: 'Student Applicant Profiles',
         category: 'view',
@@ -266,14 +479,14 @@ const QUERY_REGISTRY = {
             WHERE j.comp_id = ?
             ORDER BY a.applied_date DESC
         `,
-        roles: ['company', 'admin'],
+        roles: ['company'],
         description: 'Complete profiles of students who have applied to your active job openings.'
     },
     'vw_student_details': {
         name: 'Assigned Student Details',
         category: 'view',
         sql: "SELECT s_id, s_name, email, dept, cgpa, graduation_yr, profile_status, coordinator_name, coordinator_dept FROM vw_student_details WHERE coord_id = ?",
-        roles: ['coordinator', 'admin'],
+        roles: ['coordinator'],
         description: 'Comprehensive student details including their assigned coordinator info.'
     },
     'join_job_requirements': {
@@ -345,19 +558,17 @@ const QUERY_REGISTRY = {
         roles: ['admin'],
         description: 'Uses an IN subquery to find departments with confirmed placements.'
     },
-    'sub_placed_assigned': {
-        name: 'My Placed Students (Unique)',
+    'sub_coord_student_counts': {
+        name: 'Coordinator Workload Analysis',
         category: 'subquery',
         sql: `
-            SELECT DISTINCT s.s_id as stu_roll_no, s.s_name, s.dept, s.cgpa
-            FROM STUDENT s
-            JOIN PLACEMENT_RECORD pr ON s.s_id = pr.s_id
-            WHERE pr.status IN ('confirmed', 'joined')
-            AND (s.coord_id = ? OR 'admin' = ?)
-            ORDER BY s.s_name ASC
+            SELECT pc.name, pc.dept, 
+                   (SELECT COUNT(*) FROM STUDENT WHERE coord_id = pc.coord_id) as assigned_student_count
+            FROM PLACEMENT_COORDINATOR pc
+            ORDER BY assigned_student_count DESC
         `,
-        roles: ['coordinator', 'admin'],
-        description: 'Displays 23 unique students from your assigned list who have secured at least one placement.'
+        roles: ['admin'],
+        description: 'Correlated subquery displaying each coordinator and their current total of assigned students.'
     }
 };
 

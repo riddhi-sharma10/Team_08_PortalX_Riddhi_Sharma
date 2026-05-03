@@ -228,6 +228,8 @@ export const QueriesExplorer = {
                                             }
                                         } else if (headerLower.includes('date') && val) {
                                             val = new Date(val).toLocaleDateString();
+                                        } else if (typeof val === 'string' && (val.startsWith('http') || headerLower.includes('url'))) {
+                                            val = `<span class="truncate-cell" title="${val}">${val}</span>`;
                                         }
                                         
                                         return `<td>${val}</td>`;
