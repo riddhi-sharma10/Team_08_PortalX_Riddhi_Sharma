@@ -35,7 +35,9 @@ async function setupTriggers() {
             'trg_update_eligibility',
             'trg_application_audit',
             'trg_prevent_duplicate_placement',
-            'trg_vacancy_sync'
+            'trg_vacancy_sync',
+            'trg_auto_assign_coordinator',
+            'trg_auto_sync_coordinator_on_dept_change'
         ];
         for (const t of triggers) {
             await conn.query(`DROP TRIGGER IF EXISTS ${t}`);
@@ -92,6 +94,54 @@ async function setupTriggers() {
             BEGIN
                 IF NEW.offer_status = 'accepted' AND OLD.offer_status <> 'accepted' THEN
                     UPDATE JOB_PROFILE SET vacancies = vacancies - 1 WHERE job_id = NEW.job_id;
+                END IF;
+            END
+        `);
+
+        // 7. Trigger: Automatic Coordinator Assignment
+        console.log('6. Creating Coordinator Assignment Trigger...');
+        await conn.query(`
+            CREATE TRIGGER trg_auto_assign_coordinator
+            BEFORE INSERT ON STUDENT
+            FOR EACH ROW
+            BEGIN
+                IF NEW.coord_id IS NULL THEN
+                    SET NEW.coord_id = (
+                        SELECT coord_id FROM PLACEMENT_COORDINATOR 
+                        WHERE dept = CASE 
+                            WHEN NEW.dept IN ('IT', 'Information Technology') THEN 'Information Technology'
+                            WHEN NEW.dept IN ('Mechanical', 'Mechanical Engineering') THEN 'Mechanical Engineering'
+                            WHEN NEW.dept IN ('Computer Science', 'Electrical') THEN 'Computer Science'
+                            WHEN NEW.dept IN ('Electronics', 'Electronics and Communication') THEN 'Electronics and Communication'
+                            WHEN NEW.dept IN ('Civil', 'Civil Engineering') THEN 'Civil Engineering'
+                            ELSE 'Computer Science'
+                        END
+                        LIMIT 1
+                    );
+                END IF;
+            END
+        `);
+
+        // 8. Trigger: Coordinator Auto-Sync on Dept Change
+        console.log('7. Creating Coordinator Dept Sync Trigger...');
+        await conn.query(`
+            CREATE TRIGGER trg_auto_sync_coordinator_on_dept_change
+            BEFORE UPDATE ON STUDENT
+            FOR EACH ROW
+            BEGIN
+                IF NEW.dept <> OLD.dept AND (NEW.coord_id = OLD.coord_id OR NEW.coord_id IS NULL) THEN
+                    SET NEW.coord_id = (
+                        SELECT coord_id FROM PLACEMENT_COORDINATOR 
+                        WHERE dept = CASE 
+                            WHEN NEW.dept IN ('IT', 'Information Technology') THEN 'Information Technology'
+                            WHEN NEW.dept IN ('Mechanical', 'Mechanical Engineering') THEN 'Mechanical Engineering'
+                            WHEN NEW.dept IN ('Computer Science', 'Electrical') THEN 'Computer Science'
+                            WHEN NEW.dept IN ('Electronics', 'Electronics and Communication') THEN 'Electronics and Communication'
+                            WHEN NEW.dept IN ('Civil', 'Civil Engineering') THEN 'Civil Engineering'
+                            ELSE 'Computer Science'
+                        END
+                        LIMIT 1
+                    );
                 END IF;
             END
         `);
