@@ -215,7 +215,7 @@ const App = {
             let modulePath = `./${roleFolder}/${pageId}.js`;
             
             // Handle common modules
-            if (['messages', 'settings'].includes(pageId)) {
+            if (['messages'].includes(pageId)) {
                 modulePath = `./common/${pageId}.js`;
             }
 
