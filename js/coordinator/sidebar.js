@@ -9,7 +9,7 @@ export const Sidebar = {
             { id: 'interviews',   label: 'Interviews',   icon: 'calendar-outline' },
             { id: 'offers',       label: 'Offers',       icon: 'cash-outline' },
             { id: 'placements',   label: 'Placements',   icon: 'trophy-outline' },
-            { id: 'queries',      label: 'Queries',      icon: 'code-working-outline' },
+            { id: 'queries',      label: 'Queries Explorer', icon: 'code-working-outline' },
         ];
 
         sidebar.innerHTML = `

@@ -51,7 +51,24 @@ async function createAccuracyViews() {
                 last_login
             FROM USER_ROLE
         `);
-        console.log('Created: vw_consolidated_user_roles');
+        // 4. Detailed Student Profiles with Coordinator Info
+        await pool.query(`
+            CREATE OR REPLACE VIEW vw_student_details AS
+            SELECT 
+                s.s_id, 
+                s.s_name, 
+                s.email, 
+                s.dept, 
+                s.cgpa, 
+                s.graduation_yr, 
+                s.profile_status, 
+                pc.name AS coordinator_name, 
+                pc.dept AS coordinator_dept,
+                s.coord_id
+            FROM STUDENT s
+            LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+        `);
+        console.log('Created: vw_student_details');
 
         console.log('\nAll Consistency Views created successfully.');
 

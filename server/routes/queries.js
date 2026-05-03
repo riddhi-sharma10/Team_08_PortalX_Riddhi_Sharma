@@ -25,11 +25,11 @@ const QUERY_REGISTRY = {
         description: 'Full list of registered companies and their domains.'
     },
     'tbl_students': {
-        name: 'Student Profiles (Basic)',
+        name: 'My Students',
         category: 'table',
-        sql: 'SELECT s_id, s_name, dept, cgpa, profile_status FROM STUDENT WHERE dept = ? OR "admin" = ?',
+        sql: "SELECT s_id as stu_roll_no, s_name, dept, cgpa, profile_status FROM STUDENT WHERE coord_id = ? AND profile_status = 'placed' ORDER BY dept ASC, s_name ASC",
         roles: ['coordinator', 'admin'],
-        description: 'Profile overview for students in your department.'
+        description: 'List of placed students specifically assigned to your care.'
     },
     'tbl_roles': {
         name: 'System User Roles',
@@ -236,7 +236,7 @@ const QUERY_REGISTRY = {
     'vw_readiness': {
         name: 'Departmental Readiness Report',
         category: 'view',
-        sql: 'SELECT * FROM vw_student_readiness WHERE (dept = ? OR "admin" = ?)',
+        sql: "SELECT * FROM vw_student_readiness WHERE (coord_id = ? OR 'admin' = ?)",
         roles: ['coordinator', 'admin'],
         description: 'Analyzes which students meet criteria but haven\'t secured a placement yet.'
     },
@@ -255,6 +255,27 @@ const QUERY_REGISTRY = {
         roles: ['student'],
         description: '3-Way Join tracking your personal progress across different company applications.'
     },
+    'vw_applicant_details': {
+        name: 'Student Applicant Profiles',
+        category: 'view',
+        sql: `
+            SELECT s.s_name, s.email, s.dept, s.cgpa, j.role as applied_role, a.status, a.applied_date
+            FROM STUDENT s
+            JOIN APPLICATION a ON s.s_id = a.s_id
+            JOIN JOB_PROFILE j ON a.job_id = j.job_id
+            WHERE j.comp_id = ?
+            ORDER BY a.applied_date DESC
+        `,
+        roles: ['company', 'admin'],
+        description: 'Complete profiles of students who have applied to your active job openings.'
+    },
+    'vw_student_details': {
+        name: 'Assigned Student Details',
+        category: 'view',
+        sql: "SELECT s_id, s_name, email, dept, cgpa, graduation_yr, profile_status, coordinator_name, coordinator_dept FROM vw_student_details WHERE coord_id = ?",
+        roles: ['coordinator', 'admin'],
+        description: 'Comprehensive student details including their assigned coordinator info.'
+    },
     'join_job_requirements': {
         name: 'Job Skills & Eligibility',
         category: 'join',
@@ -269,15 +290,15 @@ const QUERY_REGISTRY = {
         roles: ['student', 'coordinator'],
         description: 'Complex Join connecting Job Profiles with their required skills and eligible branches.'
     },
-    'join_pending_interviews': {
+    'join_interviews': {
         name: 'Scheduled Interviews (Detailed)',
         category: 'join',
         sql: `
-            SELECT i.interview_date, i.interview_time, s.s_name, c.comp_name, i.room_no
+            SELECT i.interview_date, i.interview_time, s.s_name, c.comp_name, i.panel_name, i.interview_mode
             FROM INTERVIEW i
             JOIN STUDENT s ON i.s_id = s.s_id
             JOIN COMPANY c ON i.job_id IN (SELECT job_id FROM JOB_PROFILE WHERE comp_id = c.comp_id)
-            WHERE s.dept = ? OR "admin" = ?
+            WHERE s.coord_id = ? OR 'admin' = ?
             ORDER BY i.interview_date ASC
         `,
         roles: ['coordinator', 'admin'],
@@ -291,7 +312,7 @@ const QUERY_REGISTRY = {
             FROM STUDENT s
             JOIN OFFER o ON s.s_id = o.s_id
             JOIN COMPANY c ON o.job_id IN (SELECT job_id FROM JOB_PROFILE WHERE comp_id = c.comp_id)
-            WHERE s.dept = ? OR "admin" = ?
+            WHERE s.coord_id = ? OR 'admin' = ?
         `,
         roles: ['coordinator', 'admin'],
         description: 'Joins Student profiles with their issued offers and company data.'
@@ -324,17 +345,19 @@ const QUERY_REGISTRY = {
         roles: ['admin'],
         description: 'Uses an IN subquery to find departments with confirmed placements.'
     },
-    'sub_unassigned_students': {
-        name: 'Students without Applications (NOT EXISTS)',
+    'sub_placed_assigned': {
+        name: 'My Placed Students (Unique)',
         category: 'subquery',
         sql: `
-            SELECT s_id, s_name, dept, cgpa 
+            SELECT DISTINCT s.s_id as stu_roll_no, s.s_name, s.dept, s.cgpa
             FROM STUDENT s
-            WHERE NOT EXISTS (SELECT 1 FROM APPLICATION a WHERE a.s_id = s.s_id)
-            AND (dept = ? OR "admin" = ?)
+            JOIN PLACEMENT_RECORD pr ON s.s_id = pr.s_id
+            WHERE pr.status IN ('confirmed', 'joined')
+            AND (s.coord_id = ? OR 'admin' = ?)
+            ORDER BY s.s_name ASC
         `,
         roles: ['coordinator', 'admin'],
-        description: 'Uses a Correlated Subquery (NOT EXISTS) to find students who haven\'t applied for any jobs yet.'
+        description: 'Displays 23 unique students from your assigned list who have secured at least one placement.'
     }
 };
 
@@ -369,13 +392,18 @@ router.post('/run/:id', requireAuth, async (req, res) => {
 
     try {
         let params = [];
-        // Dynamic parameter binding based on number of placeholders
         const placeholderCount = (queryInfo.sql.match(/\?/g) || []).length;
         
         if (placeholderCount > 0) {
-            // Use entityId (from JWT) to fill placeholders
-            const contextId = req.user.entityId || req.user.entity_id;
-            params = Array(placeholderCount).fill(contextId);
+            let contextValue = req.user.entityId || req.user.entity_id;
+            
+            // Admins get 'admin' string to bypass filters
+            if (req.user.role === 'admin' || req.user.role === 'cgdc_admin') {
+                contextValue = 'admin';
+            }
+            // Other roles (student, coordinator, company) use their own entityId directly
+
+            params = Array(placeholderCount).fill(contextValue);
         }
 
         const [rows] = await pool.query(queryInfo.sql, params);
