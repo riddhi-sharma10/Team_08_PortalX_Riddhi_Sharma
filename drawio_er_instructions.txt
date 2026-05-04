@@ -11,14 +11,97 @@ SHAPE LEGEND (keep this open while working in draw.io):
   (Underlined Oval)     = PRIMARY KEY  <-- underline the text inside
   (Dashed Oval)         = Derived Attribute (calculated, not stored)
   ((Double-border Oval))= Multi-Valued Attribute
-  <Diamond>             = Relationship
+  <Diamond>             = Regular Relationship
+  <Double Diamond>      = IDENTIFYING Relationship (used with Weak Entities)
   Line "1"              = One side
   Line "N"              = Many side
   Dot (filled)  ●       = Mandatory participation (total)
   Circle        ○       = Optional participation (partial)
+  (Dashed Underline)    = Partial Key / Discriminator (used inside Weak Entities)
 
 NOTE: Foreign Keys are NOT drawn as ovals.
       They become the RELATIONSHIP LINE between two entities.
+
+=========================================================
+PART 0 — WEAK ENTITIES (CRITICAL — READ FIRST)
+=========================================================
+
+WHAT IS A WEAK ENTITY?
+  A Weak Entity is a table that:
+    1. Cannot be uniquely identified by its OWN attributes alone.
+    2. DEPENDS on another (owner/strong) entity for its existence.
+    3. Uses a PARTIAL KEY (discriminator) shown with a DASHED UNDERLINE.
+    4. Its full identity = Owner Entity's PK + Partial Key combined.
+
+  In draw.io, draw it as:
+    - Entity box    : [DOUBLE RECTANGLE]  (double-border box)
+    - Relationship  : <DOUBLE DIAMOND>    (double-border diamond)
+    - Partial key   : Oval with DASHED underline on the text
+
+-----------------------------------------------------------
+YOUR DATABASE HAS 4 WEAK ENTITIES:
+-----------------------------------------------------------
+
+★ WEAK ENTITY 1: RESUME_PARSED_KEYWORD
+  Owner Entity  : RESUME
+  Partial Key   : keyword  (draw with dashed underline)
+  Full PK       : resume_id + keyword  (composite)
+  Why Weak?     : "keyword" alone has no meaning without knowing
+                  WHICH resume it belongs to. Delete a resume and
+                  all its keywords must also be deleted.
+  Draw as       : [Double Rectangle]
+  Relationship  : <Double Diamond> named "parsed into"
+  Cardinality   : RESUME --1==<parsed into>==N-- RESUME_PARSED_KEYWORD
+
+★ WEAK ENTITY 2: JOB_REQUIRED_SKILL
+  Owner Entity  : JOB_PROFILE
+  Partial Key   : skill_name  (draw with dashed underline)
+  Full PK       : job_id + skill_name  (composite)
+  Why Weak?     : "Python" or "Java" as a skill means nothing without
+                  knowing WHICH job requires it. Delete the job and
+                  the required skills are deleted too.
+  Draw as       : [Double Rectangle]
+  Relationship  : <Double Diamond> named "requires skill"
+  Cardinality   : JOB_PROFILE --1==<requires skill>==N-- JOB_REQUIRED_SKILL
+
+★ WEAK ENTITY 3: JOB_ELIGIBILITY_BRANCH
+  Owner Entity  : JOB_PROFILE
+  Partial Key   : branch_name  (draw with dashed underline)
+  Full PK       : job_id + branch_name  (composite)
+  Why Weak?     : "Computer Science" as a branch name alone doesn't
+                  identify which job allows it. Entirely depends on
+                  the parent JOB_PROFILE row.
+  Draw as       : [Double Rectangle]
+  Relationship  : <Double Diamond> named "eligible for branch"
+  Cardinality   : JOB_PROFILE --1==<eligible for branch>==N-- JOB_ELIGIBILITY_BRANCH
+
+★ WEAK ENTITY 4: VISIT_COVERED_STREAM
+  Owner Entity  : COMPANY_VISIT_HISTORY
+  Partial Key   : stream_name  (draw with dashed underline)
+  Full PK       : visit_id + stream_name  (composite)
+  Why Weak?     : "IT" or "Civil" as a stream has no meaning without
+                  knowing which campus visit it refers to. Deleting
+                  the visit removes its covered streams.
+  Draw as       : [Double Rectangle]
+  Relationship  : <Double Diamond> named "covers stream"
+  Cardinality   : COMPANY_VISIT_HISTORY --1==<covers stream>==N-- VISIT_COVERED_STREAM
+
+-----------------------------------------------------------
+NOT Weak Entities (Common Mistakes to AVOID):
+-----------------------------------------------------------
+  STUDENT_SKILL    → Has own PK: skill_id (INT auto_increment) → STRONG
+  STATUS_AUDIT_LOG → Has own PK: log_id                        → STRONG
+  NOTIFICATION     → Has own PK: notif_id                      → STRONG
+  CHAT_MESSAGE     → Has own PK: message_id                    → STRONG
+
+QUICK SUMMARY:
+  Entity                  | Type   | Owner Entity
+  ------------------------|--------|---------------------
+  RESUME_PARSED_KEYWORD   | WEAK ★ | RESUME
+  JOB_REQUIRED_SKILL      | WEAK ★ | JOB_PROFILE
+  JOB_ELIGIBILITY_BRANCH  | WEAK ★ | JOB_PROFILE
+  VISIT_COVERED_STREAM    | WEAK ★ | COMPANY_VISIT_HISTORY
+  All other 17 entities   | Strong | —
 
 =========================================================
 PART 1 — FIX YOUR 7 EXISTING ENTITIES
