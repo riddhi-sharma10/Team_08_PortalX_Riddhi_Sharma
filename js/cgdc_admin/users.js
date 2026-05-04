@@ -362,11 +362,11 @@ export async function render(container, appOrRefresh = false) {
         </div>
     `;
 
+    configureFiltersForRole();
     hydrateKpis();
     bindEvents();
     bindModalEvents(container, app);
 
-    configureFiltersForRole();
     renderTable();
 }
 
@@ -404,6 +404,17 @@ function bindEvents() {
         renderTable();
     });
 
+    // Real-time select filters
+    ['user-status-filter', 'user-branch-filter', 'user-permission-filter', 'user-activity-filter'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', (e) => {
+            const filterKey = id.replace('user-', '').replace('-filter', '');
+            state.filters[filterKey] = e.target.value;
+            state.currentPage = 1;
+            saveFiltersToSession();
+            renderTable();
+        });
+    });
+
     const filterBtn = document.getElementById('user-filter-btn');
     const filterPanel = document.getElementById('user-filter-panel');
     const applyBtn = document.getElementById('user-apply-filters');
@@ -414,14 +425,8 @@ function bindEvents() {
     });
 
     applyBtn?.addEventListener('click', () => {
-        state.filters.status = getSelectValue('user-status-filter');
-        state.filters.branch = getSelectValue('user-branch-filter');
-        state.filters.permission = getSelectValue('user-permission-filter');
-        state.filters.activity = getSelectValue('user-activity-filter');
-        state.currentPage = 1;
+        // Since filters are now real-time, apply button just closes the panel
         filterPanel?.classList.add('hidden');
-        saveFiltersToSession();
-        renderTable();
     });
 
     document.getElementById('user-reset-filters')?.addEventListener('click', () => {
@@ -780,7 +785,9 @@ function matchesFilters(user) {
     const normalizedViewRole = state.filters.viewRole.toLowerCase() === 'admin' ? 'cgdc_admin' : state.filters.viewRole.toLowerCase();
     const roleMatch = String(user.role).toLowerCase() === normalizedViewRole;
     const statusMatch = state.filters.status === 'all' || String(user.status).toLowerCase() === String(state.filters.status).toLowerCase();
+    
     const branchMatch = state.filters.branch === 'all' || String(user.branch).toLowerCase() === String(state.filters.branch).toLowerCase();
+    
     const permissionMatch = state.filters.permission === 'all' || String(user.permission).toLowerCase() === String(state.filters.permission).toLowerCase();
 
     const activityMatch = (() => {
@@ -989,6 +996,14 @@ function configureFiltersForRole() {
         if (branchField) branchField.style.display = 'block';
         if (permissionField) permissionField.style.display = 'none';
         setSelectOptions('user-status-filter', ['all', 'active', 'inactive']);
+        setSelectOptions('user-branch-filter', [
+            'all',
+            'Computer Science',
+            'IT',
+            'Electronics',
+            'Mechanical',
+            'Civil'
+        ]);
         state.filters.permission = 'all';
     } else {
         if (branchField) branchField.style.display = 'block';
@@ -1000,6 +1015,14 @@ function configureFiltersForRole() {
             { value: 'rejected', label: 'Rejected' },
             { value: 'opted_out', label: 'Opted Out' },
             { value: 'not_eligible', label: 'Not Eligible' }
+        ]);
+        setSelectOptions('user-branch-filter', [
+            'all',
+            'Computer Science',
+            'IT',
+            'Electronics',
+            'Mechanical',
+            'Civil'
         ]);
         state.filters.permission = 'all';
     }
@@ -1014,10 +1037,7 @@ function setSelectOptions(selectId, values) {
         const value = typeof item === 'object' ? item.value : item;
         let label = typeof item === 'object' ? item.label : (value === 'all' ? 'All' : value);
 
-        // Pretty labels for short branch names if desired, but keep value as DB name
-        if (value === 'IT') label = 'Information Technology (IT)';
-        if (value === 'Electronics') label = 'Electronics & Communication';
-
+        // Keep labels consistent with database values
         return `<option value="${value}">${label}</option>`;
     }).join('');
 
@@ -1060,4 +1080,12 @@ export function search(query) {
     const input = document.getElementById('user-search');
     if (input) input.value = query;
     renderTable();
+}
+
+function saveFiltersToSession() {
+    try {
+        sessionStorage.setItem('admin_users_filters', JSON.stringify(state.filters));
+    } catch (err) {
+        console.warn('Failed to save filters to session:', err);
+    }
 }
