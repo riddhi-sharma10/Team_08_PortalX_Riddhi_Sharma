@@ -104,6 +104,63 @@ QUICK SUMMARY:
   All other 17 entities   | Strong | —
 
 =========================================================
+PART 0.5 — FOREIGN KEY MASTER LIST
+=========================================================
+
+WHY THIS MATTERS:
+  In a conceptual ER diagram, a FOREIGN KEY column is NEVER drawn as
+  an attribute oval. Instead, it is represented by the RELATIONSHIP
+  LINE drawn between two entities.
+  This section maps every FK column → to the relationship line it creates.
+
+  RULE: If a column ends in "_id" and it references another table,
+        it is a FK. Draw a line. Do NOT draw an oval for it.
+
+-------------------------------------------------------------------
+TABLE          | FK COLUMN      | REFERENCES         | RELATIONSHIP LINE TO DRAW
+-------------------------------------------------------------------
+STUDENT        | coord_id       | PLACEMENT_COORDINATOR | "guided by" line between STUDENT and PLACEMENT_COORDINATOR
+PLACEMENT_COORD| cgdc_id        | CGDC_ADMIN         | "supervised by" line between PLACEMENT_COORDINATOR and CGDC_ADMIN
+JOB_PROFILE    | comp_id        | COMPANY            | "posts" line between COMPANY and JOB_PROFILE
+APPLICATION    | s_id           | STUDENT            | "submits" line between STUDENT and APPLICATION
+APPLICATION    | job_id         | JOB_PROFILE        | "receives" line between JOB_PROFILE and APPLICATION
+INTERVIEW      | s_id           | STUDENT            | "appears for" line between STUDENT and INTERVIEW
+INTERVIEW      | job_id         | JOB_PROFILE        | "has interview" line between JOB_PROFILE and INTERVIEW
+OFFER          | s_id           | STUDENT            | "gets offer" line between STUDENT and OFFER
+OFFER          | job_id         | JOB_PROFILE        | "leads to offer" line between JOB_PROFILE and OFFER
+PLACEMENT_RECORD| s_id          | STUDENT            | "is placed in" line between STUDENT and PLACEMENT_RECORD
+PLACEMENT_RECORD| comp_id       | COMPANY            | "confirms placement" line between COMPANY and PLACEMENT_RECORD
+PLACEMENT_RECORD| job_id        | JOB_PROFILE        | "results in record" line between JOB_PROFILE and PLACEMENT_RECORD
+RESUME         | s_id           | STUDENT            | "uploads" line between STUDENT and RESUME
+RESUME_PARSED_KEYWORD | resume_id | RESUME           | "parsed into" line (DOUBLE DIAMOND — weak entity)
+STUDENT_SKILL  | s_id           | STUDENT            | "has skill" line between STUDENT and STUDENT_SKILL
+JOB_REQUIRED_SKILL | job_id     | JOB_PROFILE        | "requires skill" line (DOUBLE DIAMOND — weak entity)
+JOB_ELIGIBILITY_BRANCH | job_id | JOB_PROFILE        | "eligible for branch" line (DOUBLE DIAMOND — weak entity)
+COMPANY_VISIT_HISTORY | comp_id | COMPANY            | "conducts visit" line between COMPANY and COMPANY_VISIT_HISTORY
+VISIT_COVERED_STREAM | visit_id | COMPANY_VISIT_HISTORY | "covers stream" line (DOUBLE DIAMOND — weak entity)
+STATUS_AUDIT_LOG | app_id       | APPLICATION        | "logs changes of" line between APPLICATION and STATUS_AUDIT_LOG
+NOTIFICATION   | user_id        | USER_ROLE          | "notified via" line between USER_ROLE and NOTIFICATION
+USER_ROLE      | entity_id      | STUDENT / COORD / ADMIN | Represented by the "has login" lines (1:1) to each user type
+-------------------------------------------------------------------
+
+TOTAL FOREIGN KEYS IN YOUR DATABASE: 22
+TOTAL RELATIONSHIP LINES TO DRAW:    22 (each FK = one line)
+
+NOTE ON USER_ROLE.entity_id:
+  This is a POLYMORPHIC FK — it points to different tables based on
+  the "entity_type" column (student / coordinator / cgdc_admin).
+  In the ER diagram, draw THREE separate "has login" lines:
+    STUDENT (1) ────────────── <has login> ─────────── (1) USER_ROLE
+    PLACEMENT_COORDINATOR (1) ─ <has login> ─────────── (1) USER_ROLE
+    CGDC_ADMIN (1) ──────────── <has login> ─────────── (1) USER_ROLE
+
+NOTE ON CHAT_MESSAGE (sender_id, receiver_id):
+  Both sender_id and receiver_id reference USER_ROLE.user_id.
+  Draw TWO separate lines:
+    USER_ROLE (1) ─── <sends> ─────── (N) CHAT_MESSAGE
+    USER_ROLE (1) ─── <receives> ──── (N) CHAT_MESSAGE
+
+=========================================================
 PART 1 — FIX YOUR 7 EXISTING ENTITIES
 =========================================================
 
