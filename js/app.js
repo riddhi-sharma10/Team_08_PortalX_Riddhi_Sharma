@@ -40,19 +40,19 @@ const App = {
         const handleVisibility = () => {
             if (document.visibilityState === 'visible' && this.state.user && !isModalOpen()) {
                 console.log('[TabSync] Tab visible — refreshing data');
-                this.navigateTo(this.state.currentPage);
+                this.navigateTo(this.state.currentPage, { isRefresh: true });
             }
         };
 
         document.addEventListener('visibilitychange', handleVisibility);
 
-        // Also auto-refresh every 30 seconds while tab is open
+        // Also auto-refresh every 60 seconds while tab is open
         setInterval(() => {
             if (!document.hidden && this.state.user && !isModalOpen()) {
-                console.log('[AutoRefresh] 30s tick — refreshing data');
-                this.navigateTo(this.state.currentPage);
+                console.log('[AutoRefresh] 60s tick — refreshing data');
+                this.navigateTo(this.state.currentPage, { isRefresh: true });
             }
-        }, 30000);
+        }, 60000);
     },
 
     setupResizer() {
@@ -178,7 +178,23 @@ const App = {
         this.navigateTo(savedPage || 'dashboard');
     },
 
-    async navigateTo(pageId) {
+    async navigateTo(pageId, options = {}) {
+        // PREVENT RE-RENDERING IF SAME PAGE AND IS REFRESH
+        // This avoids flickering and losing scroll position or input focus
+        if (options.isRefresh && this.state.currentPage === pageId) {
+            // Special cases where we DO want to refresh data inside the module if possible
+            if (this.currentModule && this.currentModule.refresh) {
+                console.log(`[Navigate] Refreshing ${pageId} data without re-render`);
+                this.currentModule.refresh();
+                return;
+            }
+            
+            // For most modules, if it's a background refresh, we skip the full re-render
+            // to avoid flickering and losing input focus/scroll.
+            console.log(`[Navigate] Background refresh for ${pageId} — skipping full render`);
+            return;
+        }
+
         // PREVENT RE-RENDERING IF SAME PAGE AND IS QUERIES
         // (to keep query results from disappearing on auto-refresh)
         if (this.state.currentPage === pageId && pageId === 'queries' && document.getElementById('query-results')?.innerHTML.includes('table')) {
@@ -198,6 +214,8 @@ const App = {
         }
 
         const resetScroll = () => {
+            if (options.isRefresh) return; // Don't jump to top on background refreshes
+            
             if (pageContent) {
                 pageContent.scrollTop = 0;
                 pageContent.style.opacity = '1';
