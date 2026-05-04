@@ -1,0 +1,632 @@
+================================================================================
+PROJECT REPORT — PART 2 OF 2
+Student Placement Cell Database Management System
+================================================================================
+
+
+================================================================================
+CHAPTER 10: SQL IMPLEMENTATION
+================================================================================
+
+10.1 DDL — Data Definition Language
+-------------------------------------
+DDL commands define the structure of the database.
+Commands used: CREATE, ALTER, DROP
+
+-- Adding a column after initial creation:
+ALTER TABLE STUDENT ADD COLUMN resume_url VARCHAR(255);
+
+-- Creating an index:
+CREATE INDEX idx_app_status ON APPLICATION(status);
+
+-- Modifying a column datatype:
+ALTER TABLE OFFER MODIFY offer_status ENUM('pending','accepted','rejected')
+DEFAULT 'pending';
+
+
+10.2 DML — Data Manipulation Language
+---------------------------------------
+DML commands manipulate data inside tables.
+Commands used: INSERT, UPDATE, DELETE
+
+-- INSERT: Student submits an application
+INSERT INTO APPLICATION (s_id, job_id, applied_date, status)
+VALUES (101, 25, NOW(), 'under_review');
+
+-- UPDATE: Coordinator shortlists a student
+UPDATE APPLICATION
+SET status = 'shortlisted'
+WHERE app_id = 45;
+
+-- DELETE: Remove a closed job profile
+DELETE FROM JOB_PROFILE
+WHERE job_id = 18 AND status = 'closed';
+
+
+10.3 DQL — Data Query Language
+--------------------------------
+DQL commands retrieve data from tables.
+
+-- Fetch top placed students by CGPA:
+SELECT s_name, dept, cgpa, profile_status
+FROM STUDENT
+WHERE profile_status = 'placed'
+ORDER BY cgpa DESC
+LIMIT 10;
+
+-- Fetch all open jobs eligible for CS department:
+SELECT role, package, app_deadline
+FROM JOB_PROFILE
+WHERE status = 'open' AND eligible_branch LIKE '%CS%';
+
+
+10.4 TCL — Transaction Control Language
+-----------------------------------------
+TCL manages database transactions to maintain ACID properties.
+
+-- Full transaction example: Accept an offer
+START TRANSACTION;
+
+  UPDATE OFFER
+  SET offer_status = 'accepted'
+  WHERE offer_id = 12;
+
+  UPDATE STUDENT
+  SET profile_status = 'placed'
+  WHERE s_id = 101;
+
+  INSERT INTO PLACEMENT_RECORD
+    (s_id, comp_id, job_id, salary_offered, academic_year, recorded_on)
+  VALUES (101, 5, 25, 12.5, 2025, NOW());
+
+COMMIT;
+-- If any step fails, ROLLBACK ensures DB stays consistent.
+
+
+10.5 JOINS
+-----------
+
+INNER JOIN — 3-Table Application Journey (used in Student Dashboard):
+  SELECT a.applied_date, c.comp_name, j.role, a.status
+  FROM APPLICATION a
+  JOIN JOB_PROFILE j ON a.job_id = j.job_id
+  JOIN COMPANY c ON j.comp_id = c.comp_id
+  WHERE a.s_id = 101;
+
+  Explanation: Connects APPLICATION → JOB_PROFILE → COMPANY to show a
+  student's full application history with company names and job roles.
+  Used in the Student Dashboard "My Application Journey" section.
+
+LEFT JOIN — Student Directory with Coordinator (used in Admin Panel):
+  SELECT s.s_name, s.dept, pc.name AS coordinator_name
+  FROM STUDENT s
+  LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+  ORDER BY s.s_name ASC;
+
+  Explanation: LEFT JOIN ensures students who have not yet been assigned a
+  coordinator still appear in the list (with NULL for coordinator_name).
+  INNER JOIN would silently hide unassigned students.
+
+4-Table Join — Scheduled Interviews (used in Coordinator Dashboard):
+  SELECT i.interview_date, s.s_name, c.comp_name, i.panel_name, i.interview_mode
+  FROM INTERVIEW i
+  JOIN STUDENT s ON i.s_id = s.s_id
+  JOIN JOB_PROFILE j ON i.job_id = j.job_id
+  JOIN COMPANY c ON j.comp_id = c.comp_id
+  WHERE s.coord_id = 3
+  ORDER BY i.interview_date ASC;
+
+
+10.6 GROUP BY & HAVING
+------------------------
+
+Rule: WHERE filters rows BEFORE grouping. HAVING filters groups AFTER.
+
+Example 1 — Coordinator Workload Analysis:
+  SELECT pc.name, COUNT(*) AS student_count
+  FROM PLACEMENT_COORDINATOR pc
+  JOIN STUDENT s ON s.coord_id = pc.coord_id
+  GROUP BY pc.coord_id, pc.name
+  HAVING COUNT(*) > 5
+  ORDER BY student_count DESC;
+
+  Why HAVING: We need to filter AFTER grouping (count > 5).
+  Cannot use WHERE for this because COUNT(*) is an aggregate function.
+
+Example 2 — Active Major Recruiters (used in Query Explorer):
+  SELECT comp_name, industry_type
+  FROM COMPANY
+  WHERE comp_id IN (
+    SELECT comp_id FROM JOB_PROFILE
+    GROUP BY comp_id
+    HAVING COUNT(*) > 1
+  );
+
+  Why: Find companies that have posted more than one job profile —
+  indicating active, high-volume recruiters.
+
+
+10.7 SUBQUERIES
+----------------
+
+Type 1: Scalar Subquery — Premium Package Filter:
+  SELECT comp_name, avg_package_offered
+  FROM COMPANY
+  WHERE avg_package_offered > (SELECT AVG(avg_package_offered) FROM COMPANY)
+  ORDER BY avg_package_offered DESC;
+
+  Explanation: The inner query dynamically calculates the average package
+  across ALL companies. The outer query uses this single scalar value to
+  filter only premium companies. Available in the Student Query Explorer.
+
+Type 2: IN Subquery — Departments with Confirmed Placements:
+  SELECT dept, COUNT(*) AS placed_count
+  FROM STUDENT
+  WHERE s_id IN (
+    SELECT s_id FROM PLACEMENT_RECORD WHERE status = 'confirmed'
+  )
+  GROUP BY dept
+  ORDER BY placed_count DESC;
+
+  Explanation: Inner query returns a list of s_ids from PLACEMENT_RECORD.
+  Outer query filters STUDENT to only those IDs and groups by department.
+
+Type 3: Correlated Subquery — Missed Eligible Jobs:
+  SELECT j.role, c.comp_name, j.package
+  FROM JOB_PROFILE j
+  JOIN COMPANY c ON j.comp_id = c.comp_id
+  JOIN STUDENT s ON s.s_id = 101
+  WHERE j.status = 'open'
+    AND j.eligibility_cgpa <= s.cgpa
+    AND j.job_id NOT IN (
+      SELECT job_id FROM APPLICATION WHERE s_id = s.s_id
+    );
+
+  Explanation: For a given student, find jobs they qualify for (CGPA >=
+  eligibility threshold) but have NOT yet applied to. The inner subquery
+  references the outer query's s_id — making it correlated.
+
+
+10.8 FUNCTIONS
+---------------
+
+Aggregate Functions (operate on groups of rows):
+
+  COUNT(*):
+    SELECT COUNT(*) AS total_students FROM STUDENT;
+    -- Returns total number of students in the system.
+
+  AVG():
+    SELECT dept, AVG(cgpa) AS avg_cgpa
+    FROM STUDENT GROUP BY dept;
+    -- Returns average CGPA per department.
+
+  MAX():
+    SELECT comp_name, MAX(salary_offered) AS highest_salary
+    FROM PLACEMENT_RECORD pr
+    JOIN COMPANY c ON pr.comp_id = c.comp_id
+    GROUP BY c.comp_id, c.comp_name;
+    -- Returns the highest salary offered per company.
+
+  SUM():
+    SELECT SUM(package) AS total_package_value
+    FROM JOB_PROFILE WHERE status = 'open';
+
+  MIN():
+    SELECT MIN(ats_score) AS lowest_ats FROM RESUME;
+
+Scalar Functions (operate on individual values):
+
+  DATE_FORMAT:
+    SELECT DATE_FORMAT(recorded_on, '%b') AS month_label
+    FROM PLACEMENT_RECORD;
+    -- Used in Trend chart to get 3-letter month abbreviations.
+
+  COALESCE:
+    SELECT COALESCE(dept, 'Unknown') AS department FROM STUDENT;
+    -- Replaces NULL dept with the string 'Unknown'.
+
+  LPAD:
+    SELECT CONCAT('ST-', LPAD(s_id, 4, '0')) AS student_id FROM STUDENT;
+    -- Formats s_id 42 as 'ST-0042' for display.
+
+  ROUND:
+    SELECT ROUND(salary_offered, 2) AS salary FROM PLACEMENT_RECORD;
+
+  UPPER:
+    SELECT UPPER(s_name) AS name FROM STUDENT LIMIT 5;
+
+
+10.9 VIEWS
+-----------
+A View is a stored SELECT query that acts as a virtual table.
+It simplifies complex queries, enforces security, and provides
+clean abstraction over the physical schema.
+
+Our project contains 30+ views. Key examples:
+
+CREATE VIEW vw_placement_rate_per_dept AS
+  SELECT
+    s.dept,
+    COUNT(*) AS total_students,
+    SUM(CASE WHEN s.profile_status = 'placed' THEN 1 ELSE 0 END) AS placed,
+    ROUND(
+      SUM(CASE WHEN s.profile_status = 'placed' THEN 1 ELSE 0 END)
+      / COUNT(*) * 100, 1
+    ) AS placement_rate_pct
+  FROM STUDENT s
+  GROUP BY s.dept;
+
+Usage in Admin Dashboard: SELECT * FROM vw_placement_rate_per_dept;
+Purpose: Shows % of students placed per department. Used in the
+"Department Analytics" section of the Admin dashboard.
+
+Other Key Views:
+  vw_student_placement_status   — Every student's current stage
+  vw_top_hiring_companies       — Companies ranked by placement count
+  vw_student_readiness          — Eligible students not yet placed
+  vw_avg_ats_by_dept            — Average ATS score per department
+  vw_placed_students_details    — Complete placed student details
+  vw_placement_overall_summary  — High-level placement snapshot
+
+
+10.10 STORED PROCEDURES
+------------------------
+A Stored Procedure is pre-compiled SQL code stored in the database,
+callable by name with parameters. Reduces network round-trips and
+encapsulates business logic at the database layer.
+
+PROCEDURE 1 — Get Coordinator Dashboard Stats:
+  DELIMITER //
+  CREATE PROCEDURE GetCoordinatorStats(IN cid INT)
+  BEGIN
+    SELECT COUNT(*) AS total_students
+    FROM STUDENT WHERE coord_id = cid;
+
+    SELECT COUNT(*) AS placed_students
+    FROM STUDENT WHERE coord_id = cid AND profile_status = 'placed';
+
+    SELECT COUNT(*) AS active_applications
+    FROM APPLICATION a
+    JOIN STUDENT s ON a.s_id = s.s_id
+    WHERE s.coord_id = cid AND a.status IN ('under_review', 'shortlisted');
+  END //
+  DELIMITER ;
+
+  CALL GetCoordinatorStats(3);
+
+PROCEDURE 2 — Mark Student as Placed:
+  DELIMITER //
+  CREATE PROCEDURE MarkStudentPlaced(
+    IN sid INT, IN cid INT, IN salary DECIMAL(6,2), IN yr INT
+  )
+  BEGIN
+    START TRANSACTION;
+    UPDATE STUDENT SET profile_status = 'placed' WHERE s_id = sid;
+    INSERT INTO PLACEMENT_RECORD (s_id, comp_id, salary_offered, academic_year, recorded_on)
+    VALUES (sid, cid, salary, yr, NOW());
+    COMMIT;
+  END //
+  DELIMITER ;
+
+
+10.11 TRIGGERS
+---------------
+A Trigger is SQL code that executes AUTOMATICALLY when an INSERT,
+UPDATE, or DELETE event occurs on a table. No explicit CALL needed.
+
+TRIGGER 1 — Log Application Status Changes:
+  DELIMITER //
+  CREATE TRIGGER log_status_change
+  AFTER UPDATE ON APPLICATION
+  FOR EACH ROW
+  BEGIN
+    IF NEW.status != OLD.status THEN
+      INSERT INTO STATUS_AUDIT_LOG (app_id, old_status, new_status, changed_at)
+      VALUES (NEW.app_id, OLD.status, NEW.status, NOW());
+    END IF;
+  END //
+  DELIMITER ;
+
+  Effect: Every time a coordinator or admin changes an application status,
+  a row is automatically inserted into STATUS_AUDIT_LOG. This creates
+  a complete, tamper-proof audit trail without any application-layer code.
+
+TRIGGER 2 — Log Initial Application:
+  Fires AFTER INSERT on APPLICATION.
+  Inserts initial 'applied' status into STATUS_AUDIT_LOG.
+
+TRIGGER 3 — Sync Student Status on Offer Accept:
+  Fires AFTER UPDATE on OFFER.
+  When offer_status becomes 'accepted', automatically sets
+  STUDENT.profile_status = 'placed' for the linked s_id.
+
+
+10.12 TRANSACTIONS & ACID
+---------------------------
+ACID Properties:
+  A — Atomicity:   All operations in a transaction succeed, or none do.
+  C — Consistency: DB transitions from one valid state to another.
+  I — Isolation:   Concurrent transactions do not interfere.
+  D — Durability:  Committed changes survive system failures.
+
+Use Case — Accepting a Job Offer (3 operations must succeed together):
+  START TRANSACTION;
+    UPDATE OFFER SET offer_status = 'accepted' WHERE offer_id = 12;
+    UPDATE STUDENT SET profile_status = 'placed' WHERE s_id = 101;
+    INSERT INTO PLACEMENT_RECORD (s_id, comp_id, salary_offered, academic_year)
+    VALUES (101, 5, 12.5, 2025);
+  COMMIT;
+
+  If the INSERT fails (e.g., duplicate key), ROLLBACK undoes both UPDATEs,
+  ensuring the DB never reaches a partial/inconsistent state.
+
+
+================================================================================
+CHAPTER 11: OUTPUT EXPLANATION (Query Demonstrations)
+================================================================================
+
+QUERY 1 — Premium Package Companies (Subquery)
+  SQL:
+    SELECT comp_name, avg_package_offered
+    FROM COMPANY
+    WHERE avg_package_offered > (SELECT AVG(avg_package_offered) FROM COMPANY)
+    ORDER BY avg_package_offered DESC;
+
+  Output (sample):
+    comp_name         | avg_package_offered
+    ------------------|--------------------
+    Google            | 42.50
+    Microsoft         | 38.00
+    Amazon            | 32.50
+
+  Explanation:
+    Inner query: Calculates global average package (e.g., 18.0 LPA).
+    Outer query: Returns companies ABOVE that average, sorted highest first.
+    Rubric relevance: Demonstrates scalar subquery + DQL + ORDER BY.
+
+QUERY 2 — Coordinator Workload (GROUP BY + HAVING)
+  SQL:
+    SELECT pc.name, COUNT(*) AS student_count
+    FROM PLACEMENT_COORDINATOR pc
+    JOIN STUDENT s ON s.coord_id = pc.coord_id
+    GROUP BY pc.coord_id, pc.name
+    HAVING COUNT(*) > 5
+    ORDER BY student_count DESC;
+
+  Output (sample):
+    name              | student_count
+    ------------------|---------------
+    Dr. Anita Sharma  | 28
+    Prof. Raj Kumar   | 21
+
+  Explanation:
+    GROUP BY aggregates students per coordinator.
+    HAVING filters: only show coordinators with MORE than 5 students.
+    Cannot use WHERE because COUNT is an aggregate — HAVING is required.
+
+QUERY 3 — Student Application Journey (3-Way JOIN)
+  SQL:
+    SELECT a.applied_date, c.comp_name, j.role, a.status
+    FROM APPLICATION a
+    JOIN JOB_PROFILE j ON a.job_id = j.job_id
+    JOIN COMPANY c ON j.comp_id = c.comp_id
+    WHERE a.s_id = 101;
+
+  Output (sample):
+    applied_date | comp_name  | role              | status
+    -------------|------------|-------------------|-----------
+    2025-01-15   | Infosys    | Software Engineer | shortlisted
+    2025-02-01   | TCS        | Data Analyst      | under_review
+
+  Explanation:
+    Connects 3 tables to produce a meaningful result for one student.
+    Shows their journey: which company, which role, current status.
+    Used live in the Student Dashboard "My Application Journey" widget.
+
+QUERY 4 — Placement Rate per Department (View)
+  SQL:
+    SELECT * FROM vw_placement_rate_per_dept;
+
+  Output (sample):
+    dept                  | total | placed | placement_rate_pct
+    ----------------------|-------|--------|--------------------
+    Computer Science      | 120   | 98     | 81.7%
+    Information Technology| 95    | 74     | 77.9%
+    Mechanical Engineering| 80    | 52     | 65.0%
+
+  Explanation:
+    Uses AVG, COUNT, CASE WHEN inside a View for clean abstraction.
+    The Admin runs this query with one line: SELECT * FROM vw_...
+    Used in the Admin Dashboard Department Analytics chart.
+
+
+================================================================================
+CHAPTER 12: DISCUSSION
+================================================================================
+
+12.1 Design Decisions
+----------------------
+1. Bridge Table for M:N: The APPLICATION table as a bridge entity is a
+   deliberate design choice that allows additional attributes (applied_date,
+   status) to be stored on the relationship itself — not possible with a
+   simple M:N representation.
+
+2. Derived Attribute: The age attribute in STUDENT is a derived attribute
+   (calculated from date_of_birth). In the ER diagram it appears as a
+   dashed oval. In the physical schema, it is NOT stored — it is calculated
+   on-the-fly using MySQL's TIMESTAMPDIFF function when needed.
+
+3. Safe Redundancy in PLACEMENT_RECORD: The stream column in PLACEMENT_RECORD
+   stores the student's department at the time of placement. Even though
+   dept exists in STUDENT, this is intentional "historical snapshot" data
+   and does NOT violate 3NF because it represents a different semantic value.
+
+4. JSON Columns in RESUME: keywords_found and keywords_missing are stored
+   as MySQL JSON type. This is a controlled exception to strict 1NF for
+   performance reasons — JSON data is accessed, not queried column-by-column.
+
+12.2 Challenges & Solutions
+-----------------------------
+Challenge 1: Multi-valued attributes in SQL
+  Solution: Created JOB_REQUIRED_SKILL and JOB_ELIGIBILITY_BRANCH
+  as separate normalized tables, satisfying 1NF.
+
+Challenge 2: M:N relationship between Student and Job
+  Solution: APPLICATION table as bridge entity with its own PK,
+  converting M:N into two 1:N relationships.
+
+Challenge 3: SQL Injection prevention
+  Solution: All queries use parameterized prepared statements via
+  mysql2's ? placeholder syntax, never string concatenation.
+
+Challenge 4: Role-based query access
+  Solution: QUERY_REGISTRY object maps each query to an array of
+  allowed roles. Backend validates role before executing any query.
+
+Challenge 5: Data consistency during concurrent offer acceptance
+  Solution: Wrapped all related UPDATE and INSERT operations in a
+  START TRANSACTION...COMMIT block with ROLLBACK on failure.
+
+
+================================================================================
+CHAPTER 13: CONCLUDING REMARKS
+================================================================================
+
+The Student Placement Cell Database Management System successfully demonstrates
+the complete lifecycle of relational database design and implementation within
+a meaningful, real-world application context.
+
+From the conceptual ER model through the fully normalized physical schema, and
+from basic DDL/DML operations through advanced SQL concepts including multi-table
+JOINs, correlated subqueries, GROUP BY with HAVING, 30+ Views, Stored Procedures,
+ACID-compliant Transactions, automated Triggers, and performance Indexing — every
+component of the DBMS curriculum is represented, implemented, and demonstrated
+with live output.
+
+The three-role portal (Student, Coordinator, Admin) provides a realistic,
+interactive environment where all SQL concepts can be demonstrated with actual
+production data rather than artificial examples.
+
+The bonus ATS Resume Analyzer feature demonstrates the integration of application
+logic with database storage, showing how DBMS concepts extend beyond mere data
+storage into enabling intelligent application features.
+
+
+================================================================================
+CHAPTER 14: SOCIETAL RELEVANCE
+================================================================================
+
+1. Digital Transformation of Academia:
+   Placement processes across Indian universities are still largely manual.
+   This system provides a blueprint for fully digitizing this critical
+   administrative function.
+
+2. Student Empowerment:
+   Real-time application tracking removes the information asymmetry that
+   students currently face. Students no longer need to repeatedly follow up
+   with coordinators to know their application status.
+
+3. Data-Driven Decision Making:
+   The analytics dashboards enable coordinators and administrators to make
+   evidence-based decisions — identifying which departments need more
+   support, which companies hire the most, and which students are at risk
+   of missing placement opportunities.
+
+4. Audit & Accountability:
+   The trigger-powered STATUS_AUDIT_LOG creates a tamper-proof trail of
+   every status change. This promotes transparency and accountability in
+   the placement process.
+
+5. Scalability for Other Institutions:
+   The system is designed generically enough to be adapted by any
+   engineering college or university with a placement cell.
+
+
+================================================================================
+CHAPTER 15: FUTURE SCOPE
+================================================================================
+
+1. Machine Learning Integration:
+   Build a recommendation engine that suggests jobs to students based on
+   their CGPA, department, skills, and past application patterns.
+
+2. Company Self-Portal:
+   Add a fourth role — Company — allowing companies to log in, post jobs,
+   and view applicant profiles directly without admin intervention.
+
+3. Mobile Application:
+   Develop a React Native or Flutter mobile app connected to the same
+   REST API, allowing students to track applications on their phones.
+
+4. Advanced Analytics:
+   Integrate predictive analytics using historical placement data to
+   forecast which companies are likely to return next year and what
+   packages they may offer.
+
+5. Document Management:
+   Enhance the RESUME module to support multiple document types (offer
+   letters, certificates) with version control and digital signatures.
+
+6. Notification System Enhancement:
+   Implement real-time push notifications (WebSocket or Firebase) for
+   instant alerts when application status changes.
+
+7. AI-Powered Interview Preparation:
+   Integrate an LLM-powered mock interview tool that generates
+   company-specific questions based on the student's applied job role.
+
+
+================================================================================
+CHAPTER 16: TEAM DETAILS AND CONTRIBUTION
+================================================================================
+
+Member          | Roll No. | Primary Contribution
+----------------|----------|--------------------------------------------------
+Riddhi Sharma   | 240604   | Database schema design, normalization, ER diagram,
+                |          | SQL views and stored procedures, GitHub management
+Mehak Kumar     | 240536   | Backend API development (Node.js/Express),
+                |          | JWT authentication, coordinator & student routes
+Manya Awasthi   | 240932   | Frontend development (all 3 dashboards),
+                |          | Chart.js integration, CSS design system, UI/UX
+Kaavish Babbar  | 240499   | ATS Resume Analyzer feature, trigger implementation,
+                |          | admin panel, Query Explorer, testing & documentation
+
+
+================================================================================
+CHAPTER 17: REFERENCES
+================================================================================
+
+1. Ramakrishnan, R. & Gehrke, J. (2003). Database Management Systems (3rd ed.).
+   McGraw-Hill Education.
+
+2. Silberschatz, A., Korth, H. F., & Sudarshan, S. (2020). Database System
+   Concepts (7th ed.). McGraw-Hill Education.
+
+3. MySQL 8.0 Reference Manual. Oracle Corporation.
+   https://dev.mysql.com/doc/refman/8.0/en/
+
+4. Express.js Documentation. OpenJS Foundation.
+   https://expressjs.com/
+
+5. Node.js Documentation. OpenJS Foundation.
+   https://nodejs.org/en/docs/
+
+6. Chart.js Documentation. Chart.js Contributors.
+   https://www.chartjs.org/docs/latest/
+
+7. Vite Documentation. Evan You & Vite Contributors.
+   https://vitejs.dev/guide/
+
+8. Aiven Cloud MySQL Documentation.
+   https://aiven.io/docs/products/mysql
+
+9. JSON Web Tokens (JWT) Introduction.
+   https://jwt.io/introduction/
+
+10. W3Schools SQL Tutorial.
+    https://www.w3schools.com/sql/
+
+================================================================================
+END OF PROJECT REPORT
+================================================================================
