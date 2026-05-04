@@ -117,6 +117,21 @@
    - Cardinality: 1:1
    - USER_ROLE Dependency: PARTIAL
 
+4. **USER_ROLE ← NOTIFICATION** (reverse of TABLE 20, Relationship 1)
+   - Relationship Name: "receives_notifications"
+   - Cardinality: 1:N (One USER_ROLE receives multiple NOTIFICATIONs)
+   - USER_ROLE Dependency: PARTIAL (Not all users receive notifications)
+
+5. **USER_ROLE ← CHAT_MESSAGE (As Sender)** (reverse of TABLE 21, Relationship 1)
+   - Relationship Name: "sends_messages"
+   - Cardinality: 1:N (One USER_ROLE sends multiple CHAT_MESSAGEs)
+   - USER_ROLE Dependency: PARTIAL (Not all users send messages)
+
+6. **USER_ROLE ← CHAT_MESSAGE (As Receiver)** (reverse of TABLE 21, Relationship 2)
+   - Relationship Name: "receives_messages"
+   - Cardinality: 1:N (One USER_ROLE receives multiple CHAT_MESSAGEs)
+   - USER_ROLE Dependency: PARTIAL (Not all users receive messages)
+
 ---
 
 ## TABLE 5: COMPANY
@@ -406,7 +421,13 @@ No direct relationships defined in the current schema. (Lookup/Reference table)
 
 **Relationships:**
 
-No direct FK relationships. (Polymorphic entity with user_id and user_role for flexible notifications)
+1. **NOTIFICATION → USER_ROLE** (Polymorphic reference)
+   - Relationship Name: "sent_to"
+   - Cardinality: N:1 (Many NOTIFICATIONs to one USER_ROLE)
+   - NOTIFICATION Dependency: PARTIAL (Some notifications may not have user assigned)
+   - USER_ROLE Dependency: PARTIAL (Not all USER_ROLE records have notifications)
+   - Foreign Key: NOTIFICATION.user_id → USER_ROLE.user_id
+   - Note: Polymorphic design - user_role column identifies which entity type (student, coordinator, admin)
 
 ---
 
@@ -414,7 +435,21 @@ No direct FK relationships. (Polymorphic entity with user_id and user_role for f
 
 **Relationships:**
 
-No direct FK relationships. (Polymorphic messaging system with sender_id/receiver_id and roles)
+1. **CHAT_MESSAGE → USER_ROLE (Sender)** (Polymorphic reference)
+   - Relationship Name: "sent_by"
+   - Cardinality: N:1 (Many messages from one USER_ROLE sender)
+   - CHAT_MESSAGE Dependency: PARTIAL (Some messages may not have sender assigned)
+   - USER_ROLE Dependency: PARTIAL (Not all USER_ROLE records send messages)
+   - Foreign Key: CHAT_MESSAGE.sender_id → USER_ROLE.user_id
+   - Note: Polymorphic - sender_role column identifies entity type (student, coordinator, admin)
+
+2. **CHAT_MESSAGE → USER_ROLE (Receiver)** (Polymorphic reference)
+   - Relationship Name: "sent_to"
+   - Cardinality: N:1 (Many messages to one USER_ROLE receiver)
+   - CHAT_MESSAGE Dependency: PARTIAL (Some messages may not have receiver assigned)
+   - USER_ROLE Dependency: PARTIAL (Not all USER_ROLE records receive messages)
+   - Foreign Key: CHAT_MESSAGE.receiver_id → USER_ROLE.user_id
+   - Note: Polymorphic - receiver_role column identifies entity type (student, coordinator, admin)
 
 ---
 
