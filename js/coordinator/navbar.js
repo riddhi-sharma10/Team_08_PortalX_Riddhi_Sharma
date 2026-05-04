@@ -61,12 +61,19 @@ export const Navbar = {
             profileLink.addEventListener('mouseleave', () => profileLink.style.opacity = '1');
         }
 
-        // Start Real-time polling
-        this.startPolling();
+        // Real-time synchronization via SSE events
+        window.addEventListener('sse:new_notification', () => this.updateBadges());
+        window.addEventListener('sse:new_message', () => this.updateBadges());
+        
+        // Initial load
+        this.updateBadges();
     },
 
     async updateBadges() {
         try {
+            const token = localStorage.getItem('placement_token');
+            if (!token) return;
+
             // Fetch unread notifications and conversations
             const [notifs, conversations] = await Promise.all([
                 api.get('/notifications'),
@@ -90,12 +97,6 @@ export const Navbar = {
         } catch (err) {
             console.error('Badge update error:', err);
         }
-    },
-
-    startPolling() {
-        if (this.pollInterval) clearInterval(this.pollInterval);
-        this.updateBadges();
-        this.pollInterval = setInterval(() => this.updateBadges(), 10000);
     },
 
     // Instantly sync navbar avatar without full re-render

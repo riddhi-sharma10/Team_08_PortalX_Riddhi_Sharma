@@ -343,7 +343,16 @@ router.patch('/applications/:id/status', async (req, res) => {
             }
 
             await conn.commit();
+
+            // --- PUSH analytics_update to coordinator so their charts refresh ---
+            import('../sse.js').then(({ notifyUser }) => {
+                // Notify coordinator with coordinator's email/userId
+                const coordUserId = req.user.email || String(req.user.entityId);
+                notifyUser(coordUserId, 'analytics_update', { trigger: 'application_status_changed', status });
+            }).catch(err => console.error('[SSE] analytics_update error:', err));
+
             res.json({ message: 'Status updated successfully' });
+
         } catch (e) {
             await conn.rollback();
             throw e;
@@ -436,7 +445,14 @@ router.post('/interviews', async (req, res) => {
             console.warn('[Notif] Failed to notify student on interview:', nErr.message);
         }
 
+        // Push analytics_update to coordinator's stream
+        import('../sse.js').then(({ notifyUser }) => {
+            const coordUserId = req.user.email || String(req.user.entityId);
+            notifyUser(coordUserId, 'analytics_update', { trigger: 'interview_scheduled' });
+        }).catch(() => {});
+
         res.json({ message: 'Interview scheduled successfully' });
+
     } catch (err) {
         await conn.rollback();
         console.error('Error scheduling interview:', err);
@@ -710,66 +726,78 @@ router.get('/analytics', async (req, res) => {
     try {
         const id = req.user.entityId || 0;
         const { year = 'all' } = req.query;
-        
-        let yearFilterStudent = '';
-        let yearFilterApp = '';
-        let yearFilterPr = '';
-        const params = [id];
-        
-        if (year !== 'all') {
-            yearFilterStudent = ' AND s.graduation_yr = ?';
-            yearFilterApp = ' AND YEAR(applied_date) = ?';
-            yearFilterPr = ' AND academic_year = ?';
-            params.push(Number(year));
-        }
 
-        const [students] = await pool.query(`SELECT COUNT(*) AS count FROM STUDENT s WHERE s.coord_id = ? ${yearFilterStudent}`, params);
+        // ── Year-based filters ──────────────────────────────────────────────
+        // KEY FIX: Always filter by student's graduation_yr (cohort), NOT by
+        // application/placement record date fields. This ensures:
+        //   - Placed count never exceeds total student count
+        //   - Applications for 2026-batch students are counted even if submitted in 2024
+        const gradFilter    = year !== 'all' ? ' AND s.graduation_yr = ?' : '';
+        const prGradFilter  = year !== 'all' ? ' AND s2.graduation_yr = ?' : '';
+        const baseParams    = year !== 'all' ? [id, Number(year)] : [id];
+
+        // ── Total students assigned to this coordinator (optionally filtered by cohort) ──
+        const [students] = await pool.query(
+            `SELECT COUNT(*) AS count FROM STUDENT s WHERE s.coord_id = ?${gradFilter}`,
+            baseParams
+        );
+
+        // ── Total applications (by students in this cohort) ────────────────
         const [applications] = await pool.query(`
-            SELECT COUNT(*) AS count 
-            FROM APPLICATION a 
-            JOIN STUDENT s ON a.s_id = s.s_id 
-            WHERE s.coord_id = ? ${yearFilterApp}
-        `, params);
+            SELECT COUNT(*) AS count
+            FROM APPLICATION a
+            JOIN STUDENT s ON a.s_id = s.s_id
+            WHERE s.coord_id = ?${gradFilter}
+        `, baseParams);
 
-        const prParams = year !== 'all' ? [id, Number(year), id, Number(year)] : [id, id];
+        // ── Placed students: count distinct students from this coord who have
+        //    a PLACEMENT_RECORD OR a 'selected' application, filtered by cohort ──
         const [placed] = await pool.query(`
             SELECT COUNT(DISTINCT s_id) AS count FROM (
-                SELECT pr.s_id FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id WHERE s.coord_id = ? ${yearFilterPr}
+                SELECT pr.s_id
+                FROM PLACEMENT_RECORD pr
+                JOIN STUDENT s2 ON pr.s_id = s2.s_id
+                WHERE s2.coord_id = ?${prGradFilter}
                 UNION
-                SELECT a.s_id FROM APPLICATION a JOIN STUDENT s ON a.s_id = s.s_id WHERE a.status = 'selected' AND s.coord_id = ? ${year !== 'all' ? 'AND YEAR(a.applied_date) = ?' : ''}
-            ) as combined_placed
-        `, prParams);
+                SELECT a.s_id
+                FROM APPLICATION a
+                JOIN STUDENT s2 ON a.s_id = s2.s_id
+                WHERE a.status = 'selected' AND s2.coord_id = ?${prGradFilter}
+            ) AS combined_placed
+        `, year !== 'all' ? [id, Number(year), id, Number(year)] : [id, id]);
 
+        // ── Package stats (from PLACEMENT_RECORD for this coord's students) ──
         const [maxPkg] = await pool.query(`
-            SELECT MAX(val) as val FROM (
-                SELECT pr.salary_offered as val FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id WHERE s.coord_id = ? ${yearFilterPr}
-                UNION
-                SELECT j.package as val FROM APPLICATION a JOIN JOB_PROFILE j ON a.job_id = j.job_id JOIN STUDENT s ON a.s_id = s.s_id WHERE a.status = 'selected' AND s.coord_id = ? ${year !== 'all' ? 'AND YEAR(a.applied_date) = ?' : ''}
-            ) as combined_pkg
-        `, prParams);
+            SELECT MAX(pr.salary_offered) AS val
+            FROM PLACEMENT_RECORD pr
+            JOIN STUDENT s2 ON pr.s_id = s2.s_id
+            WHERE s2.coord_id = ?${prGradFilter}
+        `, baseParams);
 
         const [avgPkg] = await pool.query(`
-            SELECT AVG(val) as val FROM (
-                SELECT pr.salary_offered as val FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id WHERE s.coord_id = ? ${yearFilterPr}
-                UNION
-                SELECT j.package as val FROM APPLICATION a JOIN JOB_PROFILE j ON a.job_id = j.job_id JOIN STUDENT s ON a.s_id = s.s_id WHERE a.status = 'selected' AND s.coord_id = ? ${year !== 'all' ? 'AND YEAR(a.applied_date) = ?' : ''}
-            ) as combined_pkg
-        `, prParams);
+            SELECT AVG(pr.salary_offered) AS val
+            FROM PLACEMENT_RECORD pr
+            JOIN STUDENT s2 ON pr.s_id = s2.s_id
+            WHERE s2.coord_id = ?${prGradFilter}
+        `, baseParams);
 
         const totalStudents = Number(students[0]?.count || 0);
-        const totalPlaced = Number(placed[0]?.count || 0);
+        const totalPlaced   = Math.min(Number(placed[0]?.count || 0), totalStudents); // cap at 100%
         const placementRate = totalStudents ? ((totalPlaced / totalStudents) * 100) : 0;
 
+        // ── Salary distribution ────────────────────────────────────────────
         const [salaryBuckets] = await pool.query(`
             SELECT
-                SUM(CASE WHEN pr.salary_offered < 5 THEN 1 ELSE 0 END) AS below5,
-                SUM(CASE WHEN pr.salary_offered >= 5 AND pr.salary_offered < 10 THEN 1 ELSE 0 END) AS range5to10,
+                SUM(CASE WHEN pr.salary_offered < 5  THEN 1 ELSE 0 END) AS below5,
+                SUM(CASE WHEN pr.salary_offered >= 5  AND pr.salary_offered < 10 THEN 1 ELSE 0 END) AS range5to10,
                 SUM(CASE WHEN pr.salary_offered >= 10 AND pr.salary_offered < 20 THEN 1 ELSE 0 END) AS range10to20,
                 SUM(CASE WHEN pr.salary_offered >= 20 THEN 1 ELSE 0 END) AS above20
-            FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id
-            WHERE s.coord_id = ? ${yearFilterPr}
-        `, params);
+            FROM PLACEMENT_RECORD pr
+            JOIN STUDENT s2 ON pr.s_id = s2.s_id
+            WHERE s2.coord_id = ?${prGradFilter}
+        `, baseParams);
 
+        // ── Department breakdown ───────────────────────────────────────────
         const [deptStats] = await pool.query(`
             SELECT
                 COALESCE(s.dept, 'Unknown') AS name,
@@ -777,88 +805,100 @@ router.get('/analytics', async (req, res) => {
                 COUNT(DISTINCT pr.s_id) AS placedCount,
                 AVG(pr.salary_offered) AS avgLpa
             FROM STUDENT s
-            LEFT JOIN PLACEMENT_RECORD pr ON pr.s_id = s.s_id ${yearFilterPr.replace('WHERE', 'AND')}
-            WHERE s.coord_id = ? ${yearFilterStudent}
+            LEFT JOIN PLACEMENT_RECORD pr ON pr.s_id = s.s_id
+            WHERE s.coord_id = ?${gradFilter}
             GROUP BY COALESCE(s.dept, 'Unknown')
             ORDER BY placedCount DESC
-        `, params);
+            LIMIT 10
+        `, baseParams);
 
-        const monthlyTrendQuery = `
-            SELECT 
-                COALESCE(app_months.monthIdx, offer_months.monthIdx) AS monthIdx,
-                COALESCE(app_months.label, offer_months.label) AS label,
-                COALESCE(app_months.applications, 0) AS applications,
-                COALESCE(offer_months.offers, 0) AS offers
+        // ── Monthly trend (Applications vs Placements by month) ───────────
+        const [monthlyTrend] = await pool.query(`
+            SELECT
+                COALESCE(am.monthIdx, pm.monthIdx) AS monthIdx,
+                COALESCE(am.label,    pm.label)    AS label,
+                COALESCE(am.applications, 0)       AS applications,
+                COALESCE(pm.offers, 0)             AS offers
             FROM (
-                SELECT MONTH(applied_date) AS monthIdx, DATE_FORMAT(applied_date, '%b') AS label, COUNT(*) AS applications
-                FROM APPLICATION a JOIN STUDENT s ON a.s_id = s.s_id 
-                WHERE s.coord_id = ? ${yearFilterApp}
+                SELECT MONTH(a.applied_date) AS monthIdx,
+                       DATE_FORMAT(a.applied_date, '%b') AS label,
+                       COUNT(*) AS applications
+                FROM APPLICATION a
+                JOIN STUDENT s ON a.s_id = s.s_id
+                WHERE s.coord_id = ?${gradFilter}
                 GROUP BY monthIdx, label
-            ) app_months
+            ) am
             LEFT JOIN (
-                SELECT MONTH(pr.recorded_on) AS monthIdx, DATE_FORMAT(pr.recorded_on, '%b') AS label, COUNT(*) AS offers
-                FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id 
-                WHERE s.coord_id = ? ${yearFilterPr.replace('academic_year = ?', 'YEAR(pr.recorded_on) = ?')} AND pr.recorded_on IS NOT NULL
+                SELECT MONTH(pr.recorded_on) AS monthIdx,
+                       DATE_FORMAT(pr.recorded_on, '%b') AS label,
+                       COUNT(*) AS offers
+                FROM PLACEMENT_RECORD pr
+                JOIN STUDENT s2 ON pr.s_id = s2.s_id
+                WHERE s2.coord_id = ?${prGradFilter} AND pr.recorded_on IS NOT NULL
                 GROUP BY monthIdx, label
-            ) offer_months ON app_months.monthIdx = offer_months.monthIdx
+            ) pm ON am.monthIdx = pm.monthIdx
             ORDER BY monthIdx ASC
-        `;
-        const [monthlyTrend] = await pool.query(monthlyTrendQuery, year !== 'all' ? [id, Number(year), id, Number(year)] : [id, id]);
+        `, year !== 'all' ? [id, Number(year), id, Number(year)] : [id, id]);
 
+        // ── Application status breakdown ───────────────────────────────────
         const [appStatusRows] = await pool.query(`
-            SELECT a.status, COUNT(*) as count 
-            FROM APPLICATION a 
-            JOIN STUDENT s ON a.s_id = s.s_id 
-            WHERE s.coord_id = ? ${yearFilterApp}
+            SELECT a.status, COUNT(*) AS count
+            FROM APPLICATION a
+            JOIN STUDENT s ON a.s_id = s.s_id
+            WHERE s.coord_id = ?${gradFilter}
             GROUP BY a.status
-        `, params);
+        `, baseParams);
 
+        // ── Top recruiting companies (by placement records) ────────────────
         const [topCompanyRows] = await pool.query(`
-            SELECT c.comp_name as name, COUNT(pr.record_id) as count 
-            FROM PLACEMENT_RECORD pr 
-            JOIN COMPANY c ON pr.comp_id = c.comp_id 
-            JOIN STUDENT s ON s.s_id = pr.s_id 
-            WHERE s.coord_id = ? ${yearFilterPr}
-            GROUP BY c.comp_id, c.comp_name 
-            ORDER BY count DESC 
+            SELECT c.comp_name AS name, COUNT(pr.record_id) AS count
+            FROM PLACEMENT_RECORD pr
+            JOIN COMPANY c  ON pr.comp_id = c.comp_id
+            JOIN STUDENT s2 ON pr.s_id = s2.s_id
+            WHERE s2.coord_id = ?${prGradFilter}
+            GROUP BY c.comp_id, c.comp_name
+            ORDER BY count DESC
             LIMIT 5
-        `, params);
+        `, baseParams);
 
+        // ── Build response ─────────────────────────────────────────────────
         const sb = salaryBuckets[0] || {};
         const dist = [
-            Number(sb.below5 || 0),
+            Number(sb.below5     || 0),
             Number(sb.range5to10 || 0),
-            Number(sb.range10to20 || 0),
-            Number(sb.above20 || 0)
+            Number(sb.range10to20|| 0),
+            Number(sb.above20    || 0)
         ];
 
         const dStats = deptStats.map(d => ({
-            name: d.name,
-            totalStudents: d.totalStudents,
-            placedCount: d.placedCount,
+            name:         d.name,
+            totalStudents:d.totalStudents,
+            placedCount:  d.placedCount,
             placementPct: d.totalStudents ? ((d.placedCount / d.totalStudents) * 100).toFixed(1) : 0,
-            avgLpa: Number(d.avgLpa || 0)
+            avgLpa:       Number(d.avgLpa || 0)
         }));
 
         res.json({
             kpis: {
-                placementRate: placementRate,
-                avgLpa: Number(avgPkg[0]?.val || 0),
-                highestLpa: Number(maxPkg[0]?.val || 0),
-                applications: Number(applications[0]?.count || 0)
+                placementRate,
+                avgLpa:      Number(avgPkg[0]?.val || 0),
+                highestLpa:  Number(maxPkg[0]?.val || 0),
+                applications:Number(applications[0]?.count || 0)
             },
             salaryDistribution: dist,
-            departments: dStats,
-            monthLabels: monthlyTrend.map(m => m.label),
-            monthlyApplications: monthlyTrend.map(m => m.applications),
-            monthlyOffers: monthlyTrend.map(m => m.offers),
-            appStatusDist: appStatusRows.map(r => ({ status: r.status, count: r.count })),
-            topCompanies: topCompanyRows.map(r => ({ name: r.name, count: r.count })),
+            departments:        dStats,
+            monthLabels:        monthlyTrend.map(m => m.label),
+            monthlyApplications:monthlyTrend.map(m => m.applications),
+            monthlyOffers:      monthlyTrend.map(m => m.offers),
+            appStatusDist:      appStatusRows.map(r => ({ status: r.status, count: r.count })),
+            topCompanies:       topCompanyRows.map(r => ({ name: r.name, count: r.count })),
             insights: [
-                `${totalPlaced} students out of ${totalStudents} assigned to you have secured placements.`,
-                `Highest package secured is ₹${Number(maxPkg[0]?.val || 0).toFixed(2)} LPA.`
+                `${totalPlaced} out of ${totalStudents} students assigned to you have secured placements.`,
+                `Placement rate: ${placementRate.toFixed(1)}% ${year !== 'all' ? `(${year} batch)` : '(all batches)'}.`,
+                `Highest package secured: ₹${Number(maxPkg[0]?.val || 0).toFixed(2)} LPA.`
             ],
-            availableYears: ['all', 2026, 2025, 2024]
+            // Note: Do NOT include 'all' here — frontend prepends it separately to avoid duplicates
+            availableYears: [2026, 2025, 2024]
         });
     } catch (err) {
         console.error(err);

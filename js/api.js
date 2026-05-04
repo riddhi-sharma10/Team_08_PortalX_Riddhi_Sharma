@@ -96,15 +96,18 @@ export const api = {
         stream.addEventListener('new_message', (e) => {
             console.log('[SSE] New Message received:', e.data);
             window.dispatchEvent(new CustomEvent('sse:new_message', { detail: JSON.parse(e.data) }));
-            // Trigger Navbar update
             if (window.App && window.App.Navbar) window.App.Navbar.updateBadges();
         });
 
         stream.addEventListener('new_notification', (e) => {
             console.log('[SSE] New Notification received:', e.data);
             window.dispatchEvent(new CustomEvent('sse:new_notification', { detail: JSON.parse(e.data) }));
-            // Trigger Navbar update
             if (window.App && window.App.Navbar) window.App.Navbar.updateBadges();
+        });
+
+        stream.addEventListener('analytics_update', (e) => {
+            console.log('[SSE] Analytics update received:', e.data);
+            window.dispatchEvent(new CustomEvent('sse:analytics_update', { detail: JSON.parse(e.data) }));
         });
 
         stream.onerror = (err) => {
