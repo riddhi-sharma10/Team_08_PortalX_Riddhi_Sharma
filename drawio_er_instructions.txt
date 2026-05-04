@@ -1,231 +1,520 @@
-COMPLETE ER DIAGRAM CHANGES GUIDE (Based on Actual MySQL Database)
-====================================================================
-Your current draw.io ER model shows 7 entities. Your actual MySQL database
-has 14+ tables. This file tells you EXACTLY what to fix and add.
+COMPLETE ER DIAGRAM GUIDE — Student Placement Cell DBMS
+=========================================================
+Source: Live MySQL database (cgdc_placement) — May 2026
+Your current diagram has 7 entities. You need 21 total.
+This file tells you EXACTLY what to fix, add, and connect.
 
-QUICK SHAPE GUIDE (Keep this open while working in draw.io):
-  [Rectangle]        = Entity (Table)
-  (Single Oval)      = Regular Attribute / Column
-  (Underlined Oval)  = Primary Key
-  (Dashed Oval)      = Derived Attribute (calculated, not stored directly)
-  ((Double Oval))    = Multi-Valued Attribute (can have multiple values)
-  <Diamond>          = Relationship (verb connecting two entities)
-  Line with "1"      = One side of the relationship
-  Line with "N"      = Many side of the relationship
+SHAPE LEGEND (keep this open while working in draw.io):
+  [Rectangle]           = Entity (Strong)
+  [Double Rectangle]    = Weak Entity
+  (Single Oval)         = Regular Attribute
+  (Underlined Oval)     = PRIMARY KEY  <-- underline the text inside
+  (Dashed Oval)         = Derived Attribute (calculated, not stored)
+  ((Double-border Oval))= Multi-Valued Attribute
+  <Diamond>             = Relationship
+  Line "1"              = One side
+  Line "N"              = Many side
+  Dot (filled)  ●       = Mandatory participation (total)
+  Circle        ○       = Optional participation (partial)
 
+NOTE: Foreign Keys are NOT drawn as ovals.
+      They become the RELATIONSHIP LINE between two entities.
 
-======================================================================
-PART 1: FIX YOUR EXISTING TABLES (Add Missing Attributes/Columns)
-======================================================================
+=========================================================
+PART 1 — FIX YOUR 7 EXISTING ENTITIES
+=========================================================
 
---- TABLE 1: Student (You already have this) ---
-CURRENTLY IN YOUR DIAGRAM: s_id, s_name, email, phone, date_of_birth, graduation_yr, skills (double oval), cgpa, dept, age, coord_id
-MISSING COLUMNS TO ADD:
-  - Add (Single Oval): profile_status
-  - Add (Single Oval): resume_url
-  - NOTE: "age" should ideally be a (Dashed Oval) because it's derived from date_of_birth
-  - NOTE: "skills" as a ((Double Oval)) is CORRECT. Keep it.
-  - NOTE: "coord_id" is a Foreign Key - draw the line from Student to Coordinator instead
+--- TABLE 1: Student ---
+STATUS: EXISTS — needs fixes + missing columns
 
---- TABLE 2: Placement_Coordinator (You already have this) ---
-CURRENTLY IN YOUR DIAGRAM: coord_id, name, dept, phone_no, email
-MISSING COLUMNS TO ADD:
-  - Add (Single Oval): bio
-  - NOTE: coord_id should be (Underlined Oval) - make sure it's underlined
+CURRENTLY IN YOUR DIAGRAM:
+  s_id, s_name, email, phone, date_of_birth, graduation_yr,
+  skills (double oval), cgpa, dept, age, coord_id
 
---- TABLE 3: Company (You already have this) ---
-CURRENTLY IN YOUR DIAGRAM: comp_id, comp_name, industry_type, contact_email, contact_phone, location
-MISSING COLUMNS TO ADD:
-  - Add (Single Oval): avg_package_offered
-  - Add (Single Oval): tier   <-- IMPORTANT: This is used heavily in analytics
+ACTIONS:
+  ✔ Keep: s_id (make sure it is UNDERLINED — it is the PK)
+  ✔ Keep: s_name, email, phone, date_of_birth, graduation_yr, cgpa, dept
+  ✔ Keep: skills as ((Double-border Oval)) — it is multi-valued
+  ✔ Change "age" to (Dashed Oval) — it is DERIVED from date_of_birth
+  ✗ Remove: coord_id as an oval — replace with a RELATIONSHIP LINE
+  + Add (Single Oval): profile_status
+  + Add (Single Oval): resume_url
+  + Add (Single Oval): avatar_url
+  + Add (Single Oval): created_at
 
---- TABLE 4: Job_Profile (You already have this) ---
-CURRENTLY IN YOUR DIAGRAM: job_id, company_id(FK), role, package, eligible_branch, eligibility_cgpa, job_type
-MISSING COLUMNS TO ADD:
-  - Add (Single Oval): status
-  - Add (Single Oval): job_description
-  - Change "eligible_branch" from (Single Oval) to ((Double Oval)) because one job can target multiple branches
-  - Add ((Double Oval)): required_skills  <-- multi-valued, one job needs many skills
-
---- TABLE 5: Application (You already have this) ---
-CURRENTLY IN YOUR DIAGRAM: s_id(FK), job_id(FK), applied_date, status, app_deadline
-MISSING COLUMNS TO ADD:
-  - Add (Underlined Oval): app_id  <-- Primary Key is MISSING! Add and underline it.
-
---- TABLE 6: Interview (You already have this) ---
-CURRENTLY IN YOUR DIAGRAM: job_id(FK), interview_date, s_id(FK), interview_mode, panel_name, interview_result
-MISSING COLUMNS TO ADD:
-  - Add (Underlined Oval): interview_id  <-- Primary Key is MISSING! Add and underline it.
-
---- TABLE 7: Offer (You already have this) ---
-CURRENTLY IN YOUR DIAGRAM: s_id(FK), job_id(FK), offer_status, joining_date
-MISSING COLUMNS TO ADD:
-  - Add (Underlined Oval): offer_id  <-- Primary Key is MISSING! Add and underline it.
+FINAL ATTRIBUTE LIST FOR STUDENT:
+  (Underlined Oval) s_id            ← PRIMARY KEY
+  (Single Oval)     s_name
+  (Single Oval)     email
+  (Single Oval)     phone
+  (Single Oval)     date_of_birth
+  (Dashed Oval)     age             ← DERIVED from date_of_birth
+  (Single Oval)     dept
+  (Single Oval)     cgpa
+  (Single Oval)     graduation_yr
+  (Single Oval)     resume_url
+  (Single Oval)     profile_status  ← active | placed | not_eligible | opted_out
+  (Single Oval)     avatar_url
+  (Single Oval)     created_at
+  ((Double Oval))   skills          ← Multi-valued
 
 
-======================================================================
-PART 2: ADD THE COMPLETELY MISSING TABLES (New Entities)
-======================================================================
+--- TABLE 2: Placement_Coordinator ---
+STATUS: EXISTS — needs fixes + missing columns
 
---- NEW TABLE 8: PLACEMENT_RECORD ---
-What it is: Stores the final confirmed placement of a student.
-Shape to add: [Rectangle] named "Placement_Record"
-Attributes to add:
-  - (Underlined Oval): record_id
-  - (Single Oval): academic_year
-  - (Single Oval): salary_offered
-  - (Single Oval): stream
-  - (Single Oval): status
-  - (Single Oval): recorded_on
-Relationships:
-  - <Diamond> named "secures"  between Student (1) and Placement_Record (N)
-    → Draw line: Student --1-- <secures> --N-- Placement_Record
-  - <Diamond> named "confirmed by"  between Company (1) and Placement_Record (N)
-    → Draw line: Company --1-- <confirmed by> --N-- Placement_Record
-  - <Diamond> named "for job"  between Job_Profile (1) and Placement_Record (N)
-    → Draw line: Job_Profile --1-- <for job> --N-- Placement_Record
+CURRENTLY IN YOUR DIAGRAM:
+  coord_id, name, dept, phone_no, email
 
+ACTIONS:
+  ✔ Keep: coord_id — make sure it is UNDERLINED (PK)
+  ✔ Keep: name, dept, phone_no, email
+  + Add (Single Oval): avatar_url
+  + Add (Single Oval): cgdc_id — NOTE: draw as a RELATIONSHIP LINE
+    to CGDC_ADMIN, not as an oval
 
---- NEW TABLE 9: RESUME ---
-What it is: Stores student resumes with ATS scoring data.
-Shape to add: [Rectangle] named "Resume"
-Attributes to add:
-  - (Underlined Oval): resume_id
-  - (Single Oval): file_url
-  - (Single Oval): uploaded_on
-  - (Single Oval): ats_score
-  - (Single Oval): version_label
-  - (Single Oval): is_active
-  - (Single Oval): role_targeted
-  - ((Double Oval)): keywords_found    <-- multi-valued
-  - ((Double Oval)): keywords_missing  <-- multi-valued
-Relationships:
-  - <Diamond> named "uploads"  between Student (1) and Resume (N)
-    → Draw line: Student --1-- <uploads> --N-- Resume
-    (A student can upload multiple resume versions)
+FINAL ATTRIBUTE LIST:
+  (Underlined Oval) coord_id        ← PRIMARY KEY
+  (Single Oval)     name
+  (Single Oval)     dept
+  (Single Oval)     email
+  (Single Oval)     phone_no
+  (Single Oval)     avatar_url
 
 
---- NEW TABLE 10: USER_ROLE ---
-What it is: Handles login credentials and role-based access for all users.
-Shape to add: [Rectangle] named "User_Role"
-Attributes to add:
-  - (Underlined Oval): user_id
-  - (Single Oval): username
-  - (Single Oval): password_hash
-  - (Single Oval): role
-  - (Single Oval): entity_id
-Relationships:
-  - <Diamond> named "authenticates"  between Student (1) and User_Role (1)
-    → Draw line: Student --1-- <authenticates> --1-- User_Role
-  - <Diamond> named "logs in as"  between Placement_Coordinator (1) and User_Role (1)
-    → Draw line: Placement_Coordinator --1-- <logs in as> --1-- User_Role
+--- TABLE 3: Company ---
+STATUS: EXISTS — needs 3 missing columns
+
+CURRENTLY IN YOUR DIAGRAM:
+  comp_id, comp_name, industry_type, contact_email, contact_phone, location
+
+ACTIONS:
+  ✔ Keep all existing attributes
+  ✔ Make comp_id UNDERLINED (PK)
+  + Add (Single Oval): avg_package_offered
+  + Add (Single Oval): tier              ← Tier 1 | Tier 2 | Tier 3 | Startup
+  + Add (Single Oval): website
+  + Add (Single Oval): created_at
+
+FINAL ATTRIBUTE LIST:
+  (Underlined Oval) comp_id
+  (Single Oval)     comp_name
+  (Single Oval)     industry_type
+  (Single Oval)     contact_email
+  (Single Oval)     contact_phone
+  (Single Oval)     location
+  (Single Oval)     avg_package_offered
+  (Single Oval)     tier
+  (Single Oval)     website
+  (Single Oval)     created_at
 
 
---- NEW TABLE 11: CGDC_ADMIN ---
-What it is: Stores admin user details (the super admin who manages everything).
-Shape to add: [Rectangle] named "CGDC_Admin"
-Attributes to add:
-  - (Underlined Oval): cgdc_id
-  - (Single Oval): name
-  - (Single Oval): email
-Relationships:
-  - <Diamond> named "manages system" between CGDC_Admin (1) and User_Role (1)
-    → Draw line: CGDC_Admin --1-- <manages system> --1-- User_Role
+--- TABLE 4: Job_Profile ---
+STATUS: EXISTS — needs fixes + missing columns
+
+CURRENTLY IN YOUR DIAGRAM:
+  job_id, company_id(FK), role, package, eligible_branch,
+  eligibility_cgpa, job_type
+
+ACTIONS:
+  ✔ Keep: job_id (UNDERLINED), role, package, eligibility_cgpa, job_type
+  ✗ Remove: company_id as oval — use RELATIONSHIP LINE to Company
+  ✔ Change "eligible_branch" → ((Double-border Oval)) — it is multi-valued
+  + Add (Single Oval): app_deadline
+  + Add (Single Oval): status         ← open | closed | paused
+  + Add (Single Oval): job_description
+  + Add (Single Oval): vacancies
+  + Add (Single Oval): created_at
+  + Add ((Double-border Oval)): required_skills  ← multi-valued
+
+FINAL ATTRIBUTE LIST:
+  (Underlined Oval) job_id
+  (Single Oval)     role
+  (Single Oval)     job_type
+  (Single Oval)     package
+  (Single Oval)     eligibility_cgpa
+  (Single Oval)     app_deadline
+  (Single Oval)     status
+  (Single Oval)     job_description
+  (Single Oval)     vacancies
+  (Single Oval)     created_at
+  ((Double Oval))   eligible_branch   ← Multi-valued
+  ((Double Oval))   required_skills   ← Multi-valued
 
 
---- NEW TABLE 12: STUDENT_SKILL ---
-What it is: The normalized version of the "skills" multi-valued attribute on Student.
-NOTE: In a Conceptual ER model (which yours is), keeping "skills" as a ((Double Oval))
-is CORRECT. You do NOT need to draw a separate box for this. However, if your professor
-asked for a relational/physical ER, then add it like this:
-Shape to add: [Weak Entity Rectangle (double border)] named "Student_Skill"
-Attributes to add:
-  - (Underlined Oval): skill_name  (partial key, underlined with dashed line)
-  - (Single Oval): proficiency_level
-Relationships:
-  - <Diamond (double border)> named "has skill"  between Student (1) and Student_Skill (N)
-    → Draw line: Student --1-- <has skill> --N-- Student_Skill
+--- TABLE 5: Application ---
+STATUS: EXISTS — missing PRIMARY KEY
+
+CURRENTLY IN YOUR DIAGRAM:
+  s_id(FK), job_id(FK), applied_date, status, app_deadline
+
+ACTIONS:
+  ✗ Remove: s_id and job_id as ovals — use RELATIONSHIP LINES
+  + Add (Underlined Oval): app_id  ← PRIMARY KEY IS MISSING! Add this.
+  ✔ Keep: applied_date, status, app_deadline
+
+FINAL ATTRIBUTE LIST:
+  (Underlined Oval) app_id          ← PRIMARY KEY — WAS MISSING
+  (Single Oval)     applied_date
+  (Single Oval)     status          ← applied | shortlisted | selected | rejected
+  (Single Oval)     app_deadline
 
 
---- NEW TABLE 13: COMPANY_VISIT_HISTORY ---
-What it is: Records each time a company visits campus for placement drives.
-Shape to add: [Rectangle] named "Company_Visit"
-Attributes to add:
-  - (Underlined Oval): visit_id
-  - (Single Oval): visit_date
-  - (Single Oval): hiring_cycle
-  - (Single Oval): students_placed
-  - ((Double Oval)): streams_covered  <-- multi-valued
-Relationships:
-  - <Diamond> named "conducts"  between Company (1) and Company_Visit (N)
-    → Draw line: Company --1-- <conducts> --N-- Company_Visit
+--- TABLE 6: Interview ---
+STATUS: EXISTS — missing PRIMARY KEY + 2 columns
+
+CURRENTLY IN YOUR DIAGRAM:
+  job_id(FK), interview_date, s_id(FK), interview_mode, panel_name, interview_result
+
+ACTIONS:
+  ✗ Remove: job_id and s_id as ovals — use RELATIONSHIP LINES
+  + Add (Underlined Oval): interview_id  ← PRIMARY KEY IS MISSING!
+  ✔ Keep: panel_name, interview_date, interview_mode, interview_result
+  + Add (Single Oval): interview_time
+  + Add (Single Oval): room_no
+
+FINAL ATTRIBUTE LIST:
+  (Underlined Oval) interview_id      ← PRIMARY KEY — WAS MISSING
+  (Single Oval)     panel_name
+  (Single Oval)     interview_date
+  (Single Oval)     interview_time
+  (Single Oval)     interview_mode    ← online | offline | hybrid
+  (Single Oval)     interview_result  ← pass | fail | on_hold | pending
+  (Single Oval)     room_no
 
 
---- NEW TABLE 14: CHAT_MESSAGE ---
-What it is: Stores messages between students and coordinators.
-Shape to add: [Rectangle] named "Chat_Message"
-Attributes to add:
-  - (Underlined Oval): message_id
-  - (Single Oval): sender_id
-  - (Single Oval): receiver_id
-  - (Single Oval): message_text
-  - (Single Oval): sent_at
-  - (Single Oval): is_read
-Relationships:
-  - <Diamond> named "sends"  between Student (1) and Chat_Message (N)
-    → Draw line: Student --1-- <sends> --N-- Chat_Message
-  - <Diamond> named "receives"  between Placement_Coordinator (1) and Chat_Message (N)
-    → Draw line: Placement_Coordinator --1-- <receives> --N-- Chat_Message
+--- TABLE 7: Offer ---
+STATUS: EXISTS — missing PRIMARY KEY + 3 columns
+
+CURRENTLY IN YOUR DIAGRAM:
+  s_id(FK), job_id(FK), offer_status, joining_date
+
+ACTIONS:
+  ✗ Remove: s_id and job_id as ovals — use RELATIONSHIP LINES
+  + Add (Underlined Oval): offer_id  ← PRIMARY KEY IS MISSING!
+  ✔ Keep: offer_status, joining_date
+  + Add (Single Oval): ctc
+  + Add (Single Oval): offer_letter_url
+  + Add (Single Oval): issued_on
+
+FINAL ATTRIBUTE LIST:
+  (Underlined Oval) offer_id          ← PRIMARY KEY — WAS MISSING
+  (Single Oval)     offer_status      ← pending | accepted | rejected
+  (Single Oval)     joining_date
+  (Single Oval)     ctc
+  (Single Oval)     offer_letter_url
+  (Single Oval)     issued_on
 
 
---- NEW TABLE 15: NOTIFICATION ---
-What it is: Stores system notifications sent to users.
-Shape to add: [Rectangle] named "Notification"
-Attributes to add:
-  - (Underlined Oval): notif_id
-  - (Single Oval): user_id (FK)
-  - (Single Oval): message
-  - (Single Oval): is_read
-  - (Single Oval): created_at
-Relationships:
-  - <Diamond> named "notified via"  between Student (1) and Notification (N)
-    → Draw line: Student --1-- <notified via> --N-- Notification
+=========================================================
+PART 2 — ADD 14 COMPLETELY NEW ENTITIES
+=========================================================
+
+--- TABLE 8: PLACEMENT_RECORD ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Final confirmed placement of a student at a company.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) record_id       ← PRIMARY KEY
+  (Single Oval)     academic_year
+  (Single Oval)     salary_offered
+  (Single Oval)     stream
+  (Single Oval)     status          ← confirmed | joined | offer_revoked | student_declined
+  (Single Oval)     recorded_on
+
+RELATIONSHIPS (draw lines after adding this entity):
+  STUDENT ──1────<is placed in>────N── PLACEMENT_RECORD
+  COMPANY ──1──<confirms placement>──N── PLACEMENT_RECORD
+  JOB_PROFILE ──1──<results in record>──N── PLACEMENT_RECORD
 
 
---- NEW TABLE 16: STATUS_AUDIT_LOG ---
-What it is: A log that auto-records every time an application status changes (via a Trigger).
-Note for professor: This table is populated automatically by a MySQL TRIGGER, not manually.
-Shape to add: [Rectangle] named "Status_Audit_Log"
-Attributes to add:
-  - (Underlined Oval): log_id
-  - (Single Oval): app_id (FK)
-  - (Single Oval): old_status
-  - (Single Oval): new_status
-  - (Single Oval): changed_at
-Relationships:
-  - <Diamond> named "logs changes of"  between Application (1) and Status_Audit_Log (N)
-    → Draw line: Application --1-- <logs changes of> --N-- Status_Audit_Log
+--- TABLE 9: RESUME ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Stores uploaded resumes with ATS scores per student.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) resume_id
+  (Single Oval)     file_url
+  (Single Oval)     uploaded_on
+  (Single Oval)     ats_score
+  (Single Oval)     version_label    ← v1, v2, etc.
+  (Single Oval)     role_targeted
+  ((Double Oval))   keywords_found   ← Multi-valued JSON
+  (Single Oval)     keywords_missing
+  (Single Oval)     is_active
+
+RELATIONSHIPS:
+  STUDENT ──1────<uploads>────N── RESUME
 
 
-======================================================================
-SUMMARY TABLE (Quick Reference)
-======================================================================
+--- TABLE 10: RESUME_PARSED_KEYWORD ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Normalized table — each row is one keyword from a resume.
+Composite PK: resume_id + keyword
 
-Entity                 | Status in Your Diagram | Action
------------------------|------------------------|----------------------------
-Student                | EXISTS                 | Add profile_status, resume_url
-Placement_Coordinator  | EXISTS                 | Add bio
-Company                | EXISTS                 | Add avg_package_offered, tier
-Job_Profile            | EXISTS                 | Add status, job_description; change eligible_branch to double-oval; add required_skills double-oval
-Application            | EXISTS                 | Add app_id (underlined PK!)
-Interview              | EXISTS                 | Add interview_id (underlined PK!)
-Offer                  | EXISTS                 | Add offer_id (underlined PK!)
-Placement_Record       | MISSING                | Add completely (see Part 2, #8)
-Resume                 | MISSING                | Add completely (see Part 2, #9)
-User_Role              | MISSING                | Add completely (see Part 2, #10)
-CGDC_Admin             | MISSING                | Add completely (see Part 2, #11)
-Student_Skill          | PARTIAL (double oval)  | Keep as double-oval OR add as weak entity
-Company_Visit_History  | MISSING                | Add completely (see Part 2, #13)
-Chat_Message           | MISSING                | Add completely (see Part 2, #14)
-Notification           | MISSING                | Add completely (see Part 2, #15)
-Status_Audit_Log       | MISSING                | Add completely (see Part 2, #16)
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) resume_id   ← PK part 1, also FK → RESUME
+  (Underlined Oval) keyword     ← PK part 2
+
+RELATIONSHIPS:
+  RESUME ──1────<parsed into>────N── RESUME_PARSED_KEYWORD
+
+
+--- TABLE 11: STUDENT_SKILL ---  [ADD NEW]
+Shape: [Rectangle]  (Strong Entity — has its own skill_id PK)
+Purpose: Normalized version of multi-valued "skills" on Student.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) skill_id      ← PRIMARY KEY
+  (Single Oval)     skill_name
+  (Single Oval)     proficiency   ← beginner | intermediate | advanced
+
+RELATIONSHIPS:
+  STUDENT ──1────<has skill>────N── STUDENT_SKILL
+
+
+--- TABLE 12: JOB_REQUIRED_SKILL ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Normalized — each row is one required skill per job.
+Composite PK: job_id + skill_name
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) job_id      ← PK part 1, also FK → JOB_PROFILE
+  (Underlined Oval) skill_name  ← PK part 2
+
+RELATIONSHIPS:
+  JOB_PROFILE ──1────<requires skill>────N── JOB_REQUIRED_SKILL
+
+
+--- TABLE 13: JOB_ELIGIBILITY_BRANCH ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Normalized — each row is one eligible branch per job.
+Composite PK: job_id + branch_name
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) job_id       ← PK part 1, also FK → JOB_PROFILE
+  (Underlined Oval) branch_name  ← PK part 2
+
+RELATIONSHIPS:
+  JOB_PROFILE ──1──<eligible for branch>──N── JOB_ELIGIBILITY_BRANCH
+
+
+--- TABLE 14: CGDC_ADMIN ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Super-admin who oversees the entire placement system.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) cgdc_id  ← PRIMARY KEY
+  (Single Oval)     name
+  (Single Oval)     email
+
+RELATIONSHIPS:
+  CGDC_ADMIN ──1────<supervises>────N── PLACEMENT_COORDINATOR
+  CGDC_ADMIN ──1────<has login>────1── USER_ROLE
+
+
+--- TABLE 15: USER_ROLE ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Centralized login/auth table for all user types.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) user_id        ← PRIMARY KEY
+  (Single Oval)     username
+  (Single Oval)     password_hash
+  (Single Oval)     role           ← student | coordinator | cgdc_admin
+  (Single Oval)     entity_id      ← points to s_id / coord_id / cgdc_id
+  (Single Oval)     entity_type    ← student | coordinator | cgdc_admin
+  (Single Oval)     is_active
+  (Single Oval)     last_login
+  (Single Oval)     created_at
+
+RELATIONSHIPS:
+  STUDENT ──1────<has login>────1── USER_ROLE
+  PLACEMENT_COORDINATOR ──1──<has login>──1── USER_ROLE
+  CGDC_ADMIN ──1────<has login>────1── USER_ROLE
+
+
+--- TABLE 16: DEPARTMENT ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Lookup table for academic departments.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) dept_id    ← PRIMARY KEY
+  (Single Oval)     dept_name  ← UNIQUE
+
+RELATIONSHIPS:
+  DEPARTMENT ──1────<has students>──────N── STUDENT
+  DEPARTMENT ──1────<has coordinators>──N── PLACEMENT_COORDINATOR
+
+
+--- TABLE 17: COMPANY_VISIT_HISTORY ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Records each campus visit / placement drive by a company.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) visit_id
+  (Single Oval)     academic_year
+  (Single Oval)     students_placed
+  (Single Oval)     highest_salary
+  (Single Oval)     lowest_salary
+  (Single Oval)     avg_salary
+  (Single Oval)     visit_date
+
+RELATIONSHIPS:
+  COMPANY ──1────<conducts visit>────N── COMPANY_VISIT_HISTORY
+
+
+--- TABLE 18: VISIT_COVERED_STREAM ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Normalized — each row is one stream covered per company visit.
+Composite PK: visit_id + stream_name
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) visit_id     ← PK part 1, also FK → COMPANY_VISIT_HISTORY
+  (Underlined Oval) stream_name  ← PK part 2
+
+RELATIONSHIPS:
+  COMPANY_VISIT_HISTORY ──1──<covers stream>──N── VISIT_COVERED_STREAM
+
+
+--- TABLE 19: CHAT_MESSAGE ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Stores messages exchanged between students and coordinators.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) message_id
+  (Single Oval)     sender_id     ← user_id of sender
+  (Single Oval)     receiver_id   ← user_id of receiver
+  (Single Oval)     message_text
+  (Single Oval)     sent_at
+  (Single Oval)     is_read
+
+RELATIONSHIPS:
+  USER_ROLE ──1────<sends>────N── CHAT_MESSAGE
+  USER_ROLE ──1────<receives>────N── CHAT_MESSAGE
+  NOTE: Draw two separate lines from USER_ROLE to CHAT_MESSAGE
+  (one labelled "sends", one labelled "receives")
+
+
+--- TABLE 20: NOTIFICATION ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: System-generated notifications sent to any user.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) notif_id
+  (Single Oval)     user_id     ← FK → USER_ROLE
+  (Single Oval)     user_role   ← student | coordinator | admin
+  (Single Oval)     title
+  (Single Oval)     content
+  (Single Oval)     type        ← message | system | alert
+  (Single Oval)     is_read
+  (Single Oval)     created_at
+
+RELATIONSHIPS:
+  USER_ROLE ──1────<notified via>────N── NOTIFICATION
+
+
+--- TABLE 21: STATUS_AUDIT_LOG ---  [ADD NEW]
+Shape: [Rectangle]
+Purpose: Audit trail — auto-populated by MySQL TRIGGER when
+         APPLICATION status changes. Write "Populated by TRIGGER"
+         as a note on the diagram near this entity.
+
+FULL ATTRIBUTE LIST:
+  (Underlined Oval) log_id
+  (Single Oval)     old_status
+  (Single Oval)     new_status
+  (Single Oval)     changed_at
+
+RELATIONSHIPS:
+  APPLICATION ──1────<logs changes of>────N── STATUS_AUDIT_LOG
+
+
+=========================================================
+PART 3 — COMPLETE RELATIONSHIP MASTER TABLE
+=========================================================
+(All 28 relationships — use this as a checklist)
+
+#  | ENTITY A                | Cardinality | Relationship Name    | Cardinality | ENTITY B
+---|-------------------------|-------------|----------------------|-------------|----------------------
+1  | STUDENT                 | N           | guided by            | 1           | PLACEMENT_COORDINATOR
+2  | STUDENT                 | 1           | submits              | N           | APPLICATION
+3  | STUDENT                 | 1           | appears for          | N           | INTERVIEW
+4  | STUDENT                 | 1           | gets offer           | N           | OFFER
+5  | STUDENT                 | 1           | is placed in         | N           | PLACEMENT_RECORD
+6  | STUDENT                 | 1           | uploads              | N           | RESUME
+7  | STUDENT                 | 1           | has skill            | N           | STUDENT_SKILL
+8  | STUDENT                 | 1           | has login            | 1           | USER_ROLE
+9  | PLACEMENT_COORDINATOR   | 1           | has login            | 1           | USER_ROLE
+10 | CGDC_ADMIN              | 1           | supervises           | N           | PLACEMENT_COORDINATOR
+11 | CGDC_ADMIN              | 1           | has login            | 1           | USER_ROLE
+12 | COMPANY                 | 1           | posts                | N           | JOB_PROFILE
+13 | COMPANY                 | 1           | confirms placement   | N           | PLACEMENT_RECORD
+14 | COMPANY                 | 1           | conducts visit       | N           | COMPANY_VISIT_HISTORY
+15 | JOB_PROFILE             | 1           | receives             | N           | APPLICATION
+16 | JOB_PROFILE             | 1           | has interview        | N           | INTERVIEW
+17 | JOB_PROFILE             | 1           | leads to offer       | N           | OFFER
+18 | JOB_PROFILE             | 1           | results in record    | N           | PLACEMENT_RECORD
+19 | JOB_PROFILE             | 1           | requires skill       | N           | JOB_REQUIRED_SKILL
+20 | JOB_PROFILE             | 1           | eligible for branch  | N           | JOB_ELIGIBILITY_BRANCH
+21 | APPLICATION             | 1           | logs changes of      | N           | STATUS_AUDIT_LOG
+22 | RESUME                  | 1           | parsed into          | N           | RESUME_PARSED_KEYWORD
+23 | COMPANY_VISIT_HISTORY   | 1           | covers stream        | N           | VISIT_COVERED_STREAM
+24 | USER_ROLE               | 1           | sends                | N           | CHAT_MESSAGE
+25 | USER_ROLE               | 1           | receives             | N           | CHAT_MESSAGE
+26 | USER_ROLE               | 1           | notified via         | N           | NOTIFICATION
+27 | DEPARTMENT              | 1           | has students         | N           | STUDENT
+28 | DEPARTMENT              | 1           | has coordinators     | N           | PLACEMENT_COORDINATOR
+
+=========================================================
+PART 4 — LAYOUT SUGGESTION (where to place each entity)
+=========================================================
+
+TOP ROW (left to right):
+  DEPARTMENT → STUDENT → APPLICATION → JOB_PROFILE → COMPANY
+
+BELOW STUDENT:
+  PLACEMENT_COORDINATOR → CGDC_ADMIN
+
+BELOW APPLICATION:
+  INTERVIEW → OFFER → PLACEMENT_RECORD
+
+BELOW JOB_PROFILE:
+  JOB_REQUIRED_SKILL → JOB_ELIGIBILITY_BRANCH
+
+BELOW STUDENT (right side):
+  RESUME → RESUME_PARSED_KEYWORD → STUDENT_SKILL
+
+BOTTOM ROW:
+  USER_ROLE → CHAT_MESSAGE → NOTIFICATION
+
+FAR RIGHT:
+  COMPANY_VISIT_HISTORY → VISIT_COVERED_STREAM
+
+ISOLATED (add note: "Trigger-populated"):
+  STATUS_AUDIT_LOG (connect to APPLICATION)
+
+=========================================================
+PART 5 — LIVE ROW COUNTS (add as a note/legend on diagram)
+=========================================================
+
+STUDENT               : 303 rows
+PLACEMENT_COORDINATOR : 10 rows
+CGDC_ADMIN            : 7 rows
+COMPANY               : 200 rows
+DEPARTMENT            : 5 rows
+JOB_PROFILE           : 2,215 rows
+APPLICATION           : 2,945 rows
+INTERVIEW             : 557 rows
+OFFER                 : 143 rows
+PLACEMENT_RECORD      : 269 rows
+RESUME                : 314 rows
+STUDENT_SKILL         : 1,500 rows
+JOB_REQUIRED_SKILL    : 6,645 rows
+JOB_ELIGIBILITY_BRANCH: 6,648 rows
+USER_ROLE             : 320 rows
+COMPANY_VISIT_HISTORY : 600 rows
+VISIT_COVERED_STREAM  : 1,800 rows
+RESUME_PARSED_KEYWORD : 900 rows
+CHAT_MESSAGE          : 31 rows
+NOTIFICATION          : 56 rows
+STATUS_AUDIT_LOG      : 3 rows
