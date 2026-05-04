@@ -61,7 +61,7 @@ router.get('/history', requireAuth, async (req, res) => {
                 vh.academic_year AS year,
                 vh.comp_id AS comp_id,
                 c.comp_name AS comp_name,
-                vh.students_placed AS placed,
+                (SELECT COUNT(*) FROM PLACEMENT_RECORD pr WHERE pr.comp_id = vh.comp_id AND pr.academic_year = vh.academic_year) AS placed,
                 vh.highest_salary AS highest,
                 vh.avg_salary AS average,
                 vh.lowest_salary AS lowest

@@ -293,9 +293,11 @@ const QUERY_REGISTRY = {
         name: 'Premium Package Opportunities',
         category: 'subquery',
         sql: `
-            SELECT comp_name, industry_type, avg_package_offered 
-            FROM COMPANY 
-            WHERE avg_package_offered > (SELECT AVG(avg_package_offered) FROM COMPANY)
+            SELECT c.comp_name, c.industry_type, AVG(j.package) as avg_package_offered
+            FROM COMPANY c
+            JOIN JOB_PROFILE j ON c.comp_id = j.comp_id
+            GROUP BY c.comp_id, c.comp_name, c.industry_type
+            HAVING avg_package_offered > (SELECT AVG(package) FROM JOB_PROFILE)
             ORDER BY avg_package_offered DESC
         `,
         roles: ['student', 'coordinator', 'admin'],

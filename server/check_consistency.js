@@ -5,30 +5,11 @@ async function checkConsistency() {
     try {
         console.log('--- STARTING CONSISTENCY AUDIT ---\n');
 
-        // Check 1: User Role Redundancy
-        const [userRoleDiffs] = await pool.query('SELECT user_id, username, role, entity_type FROM USER_ROLE WHERE role != entity_type');
-        if (userRoleDiffs.length > 0) {
-            console.warn('⚠️ Inconsistency found in USER_ROLE: role and entity_type do not match for IDs:', userRoleDiffs.map(h => h.user_id));
-        } else {
-            console.log('✅ USER_ROLE: role and entity_type are consistent.');
-        }
+        // Check 1: User Role Redundancy (Normalized - Removed)
+        console.log('✅ USER_ROLE: role and entity_type are consistent (entity_type dropped).');
 
-        // Check 2: Placement Record Summary vs Details
-        // Let's check if the counts in COMPANY_VISIT_HISTORY match the PLACEMENT_RECORD counts
-        const [visitHistoryInconsistency] = await pool.query(`
-            SELECT cvh.visit_id, cvh.comp_id, cvh.academic_year, cvh.students_placed as reported, COUNT(pr.record_id) as actual
-            FROM COMPANY_VISIT_HISTORY cvh
-            LEFT JOIN PLACEMENT_RECORD pr ON cvh.comp_id = pr.comp_id AND cvh.academic_year = pr.academic_year
-            GROUP BY cvh.visit_id
-            HAVING reported != actual
-        `);
-        
-        if (visitHistoryInconsistency.length > 0) {
-            console.warn('⚠️ Inconsistency found in COMPANY_VISIT_HISTORY: students_placed count mismatch!');
-            console.table(visitHistoryInconsistency);
-        } else {
-            console.log('✅ COMPANY_VISIT_HISTORY: Placement counts are consistent.');
-        }
+        // Check 2: Placement Record Summary vs Details (Normalized - Removed)
+        console.log('✅ COMPANY_VISIT_HISTORY: Placement counts are consistent (students_placed dropped, using views now).');
 
         // Check 3: Redundant Salary Snapshots
         const [salaryInconsistency] = await pool.query(`

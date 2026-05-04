@@ -23,9 +23,10 @@ router.get('/profile', requireAuth, async (req, res) => {
 
     try {
         const [rows] = await pool.query(`
-            SELECT s.*, pc.name as coordinator_name, pc.email as coordinator_email 
+            SELECT s.*, pc.name as coordinator_name, pc.email as coordinator_email, r.file_url as resume_url
             FROM STUDENT s
             LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            LEFT JOIN RESUME r ON s.s_id = r.s_id
             WHERE s.s_id = ?
         `, [req.user.entityId]);
         
@@ -41,11 +42,10 @@ router.get('/profile', requireAuth, async (req, res) => {
 router.put('/profile', requireAuth, async (req, res) => {
     if (req.user.role !== 'student') return res.status(403).json({ message: 'Access denied' });
 
-    const { resume_url, phone, avatar_url } = req.body;
+    const { phone, avatar_url } = req.body;
     let updates = [];
     let params = [];
 
-    if (resume_url !== undefined) { updates.push('resume_url = ?'); params.push(resume_url); }
     if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
     if (avatar_url !== undefined) { updates.push('avatar_url = ?'); params.push(avatar_url); }
 

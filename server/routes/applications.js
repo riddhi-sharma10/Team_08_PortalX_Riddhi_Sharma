@@ -239,9 +239,9 @@ router.post('/accept', requireAuth, async (req, res) => {
 
         if (compId) {
             await conn.query(`
-                INSERT INTO PLACEMENT_RECORD (s_id, comp_id, academic_year, salary_offered, stream, status, recorded_on)
-                VALUES (?, ?, ?, ?, ?, 'confirmed', CURDATE())
-            `, [student_id, compId, gradYear, salary, dept]);
+                INSERT INTO PLACEMENT_RECORD (s_id, comp_id, academic_year, salary_offered, status, recorded_on)
+                VALUES (?, ?, ?, ?, 'confirmed', CURDATE())
+            `, [student_id, compId, gradYear, salary]);
         }
 
         await conn.commit();

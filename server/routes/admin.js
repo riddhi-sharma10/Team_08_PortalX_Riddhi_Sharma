@@ -752,8 +752,8 @@ router.post('/student', async (req, res) => {
         // Create a user account for the student
         const username = email.split('@')[0];
         await conn.query(
-            'INSERT INTO USER_ROLE (username, password_hash, role, entity_id, entity_type) VALUES (?, ?, ?, ?, ?)',
-            [username, 'student123', 'student', newStudentId, 'student']
+            'INSERT INTO USER_ROLE (username, password_hash, role, entity_id) VALUES (?, ?, ?, ?)',
+            [username, 'student123', 'student', newStudentId]
         );
 
         // Handle Placement if status is 'placed'
@@ -770,9 +770,9 @@ router.post('/student', async (req, res) => {
 
             // Create Placement Record
             await conn.query(`
-                INSERT INTO PLACEMENT_RECORD (s_id, comp_id, academic_year, salary_offered, stream, status)
-                VALUES (?, ?, ?, ?, ?, 'confirmed')
-            `, [newStudentId, compId, Number(graduation_yr), parseFloat(packageLpa) || 0, dept]);
+                INSERT INTO PLACEMENT_RECORD (s_id, comp_id, academic_year, salary_offered, status)
+                VALUES (?, ?, ?, ?, 'confirmed')
+            `, [newStudentId, compId, Number(graduation_yr), parseFloat(packageLpa) || 0]);
         }
 
         await conn.commit();
