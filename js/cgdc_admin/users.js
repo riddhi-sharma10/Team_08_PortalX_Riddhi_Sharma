@@ -228,6 +228,7 @@ export async function render(container, appOrRefresh = false) {
                             </select>
                         </div>
 
+
                         <div style="display: grid; gap: 6px;">
                             <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Graduation Year *</label>
                             <select id="studentGradYear" required style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
@@ -480,6 +481,7 @@ function bindModalEvents(container, app) {
                     const maxDate = new Date(today.getFullYear() - 16, today.getMonth(), today.getDate());
                     dobInput.max = maxDate.toISOString().split('T')[0];
                 }
+
 
                 // Reset placed fields
                 const placedFields = container.querySelector('#placedFields');

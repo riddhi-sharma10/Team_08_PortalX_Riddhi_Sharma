@@ -150,7 +150,7 @@ function renderShell(container, coordName, dept) {
                 <div class="card">
                     <div class="admin-card-head">
                         <h3>Department Placements</h3>
-                        <span>Unique students placed by department</span>
+                        <span>Students placed under your coordination by department</span>
                     </div>
                     <div class="admin-dept-list">
                         ${deptRowsHTML()}
