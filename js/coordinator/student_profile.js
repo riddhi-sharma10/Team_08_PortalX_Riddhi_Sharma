@@ -93,7 +93,10 @@ function renderProfile(container, app, s, applications) {
                 </div>
 
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 24px;">
-                    <div style="display: flex; gap: 12px; align-items: center;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 24px;">
+                        <button id="backBtnHeader" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 10px 20px; border-radius: 100px; cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; transition: all 0.2s; backdrop-filter: blur(4px);">
+                            <ion-icon name="arrow-back-outline"></ion-icon> Return to List
+                        </button>
                         <button id="connectBtn" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 100px; cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); transition: all 0.2s;">
                             <ion-icon name="chatbubbles-outline"></ion-icon> Connect with ${s.s_name.split(' ')[0]}
                         </button>
@@ -219,6 +222,10 @@ function renderProfile(container, app, s, applications) {
     `;
 
     // Bind events
+    document.getElementById('backBtnHeader')?.addEventListener('click', () => {
+        app.navigateTo('students');
+    });
+
     document.getElementById('connectBtn')?.addEventListener('click', () => {
         sessionStorage.setItem('chat_target', JSON.stringify({ id: s.email, role: 'student', name: s.s_name }));
         app.navigateTo('messages');

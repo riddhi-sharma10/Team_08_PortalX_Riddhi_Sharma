@@ -369,42 +369,39 @@ router.get('/analytics', async (req, res) => {
         const { year = 'all' } = req.query;
         const appParams = [];
         let studentWhere = '';
-        let appFilterOnlyWhere = '';
-        let prAnd = '';
 
         if (year !== 'all') {
             studentWhere = 'WHERE s.graduation_yr = ?';
-            appFilterOnlyWhere = 'WHERE YEAR(applied_date) = ?';
-            prAnd = 'WHERE academic_year = ?';
             appParams.push(Number(year));
         }
 
         // KPIs
         const studentFilter = studentWhere ? studentWhere : "";
         const [students] = await pool.query(`SELECT COUNT(*) AS count FROM STUDENT s ${studentFilter}`, appParams);
-        const [applications] = await pool.query(`SELECT COUNT(*) AS count FROM APPLICATION ${appFilterOnlyWhere}`, appParams);
+        const [applications] = await pool.query(`SELECT COUNT(*) AS count FROM APPLICATION a JOIN STUDENT s ON a.s_id = s.s_id ${studentFilter}`, appParams);
+        
         // Total Placed = Unique students in PLACEMENT_RECORD OR with 'selected' applications
         const [placed] = await pool.query(`
-            SELECT COUNT(DISTINCT s_id) AS count FROM (
-                SELECT s_id FROM PLACEMENT_RECORD ${prAnd}
+            SELECT COUNT(DISTINCT combined_placed.s_id) AS count FROM (
+                SELECT pr.s_id FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id ${studentFilter}
                 UNION
-                SELECT s_id FROM APPLICATION WHERE status = 'selected' ${year !== 'all' ? 'AND YEAR(applied_date) = ?' : ''}
+                SELECT a.s_id FROM APPLICATION a JOIN STUDENT s ON a.s_id = s.s_id WHERE a.status = 'selected' ${year !== 'all' ? 'AND s.graduation_yr = ?' : ''}
             ) as combined_placed
         `, year !== 'all' ? [appParams[0], appParams[0]] : []);
 
         const [maxPkg] = await pool.query(`
             SELECT MAX(val) as val FROM (
-                SELECT salary_offered as val FROM PLACEMENT_RECORD ${prAnd}
+                SELECT pr.salary_offered as val FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id ${studentFilter}
                 UNION
-                SELECT j.package as val FROM APPLICATION a JOIN JOB_PROFILE j ON a.job_id = j.job_id WHERE a.status = 'selected' ${year !== 'all' ? 'AND YEAR(a.applied_date) = ?' : ''}
+                SELECT j.package as val FROM APPLICATION a JOIN STUDENT s ON a.s_id = s.s_id JOIN JOB_PROFILE j ON a.job_id = j.job_id WHERE a.status = 'selected' ${year !== 'all' ? 'AND s.graduation_yr = ?' : ''}
             ) as combined_pkg
         `, year !== 'all' ? [appParams[0], appParams[0]] : []);
 
         const [avgPkg] = await pool.query(`
             SELECT AVG(val) as val FROM (
-                SELECT salary_offered as val FROM PLACEMENT_RECORD ${prAnd}
+                SELECT pr.salary_offered as val FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id ${studentFilter}
                 UNION
-                SELECT j.package as val FROM APPLICATION a JOIN JOB_PROFILE j ON a.job_id = j.job_id WHERE a.status = 'selected' ${year !== 'all' ? 'AND YEAR(a.applied_date) = ?' : ''}
+                SELECT j.package as val FROM APPLICATION a JOIN STUDENT s ON a.s_id = s.s_id JOIN JOB_PROFILE j ON a.job_id = j.job_id WHERE a.status = 'selected' ${year !== 'all' ? 'AND s.graduation_yr = ?' : ''}
             ) as combined_pkg
         `, year !== 'all' ? [appParams[0], appParams[0]] : []);
 
@@ -415,12 +412,12 @@ router.get('/analytics', async (req, res) => {
         // Salary distribution buckets
         const [salaryBuckets] = await pool.query(`
             SELECT
-                SUM(CASE WHEN salary_offered < 5 THEN 1 ELSE 0 END) AS below5,
-                SUM(CASE WHEN salary_offered >= 5 AND salary_offered < 10 THEN 1 ELSE 0 END) AS range5to10,
-                SUM(CASE WHEN salary_offered >= 10 AND salary_offered < 20 THEN 1 ELSE 0 END) AS range10to20,
-                SUM(CASE WHEN salary_offered >= 20 THEN 1 ELSE 0 END) AS above20
-            FROM PLACEMENT_RECORD
-            ${prAnd}
+                SUM(CASE WHEN pr.salary_offered < 5 THEN 1 ELSE 0 END) AS below5,
+                SUM(CASE WHEN pr.salary_offered >= 5 AND pr.salary_offered < 10 THEN 1 ELSE 0 END) AS range5to10,
+                SUM(CASE WHEN pr.salary_offered >= 10 AND pr.salary_offered < 20 THEN 1 ELSE 0 END) AS range10to20,
+                SUM(CASE WHEN pr.salary_offered >= 20 THEN 1 ELSE 0 END) AS above20
+            FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id
+            ${studentWhere}
         `, appParams);
 
         // Department placement percentages
@@ -430,11 +427,11 @@ router.get('/analytics', async (req, res) => {
                 COUNT(DISTINCT s.s_id) AS totalStudents,
                 COUNT(DISTINCT pr.s_id) AS placedCount,
                 AVG(pr.salary_offered) AS avgLpa
-            FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id LEFT JOIN PLACEMENT_RECORD pr ON pr.s_id = s.s_id ${prAnd.replace('WHERE', 'AND pr.')}
+            FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id LEFT JOIN PLACEMENT_RECORD pr ON pr.s_id = s.s_id
             ${studentWhere}
             GROUP BY COALESCE(d.dept_name, 'Unknown')
             ORDER BY placedCount DESC
-        `, year !== 'all' ? [appParams[0], appParams[0]] : []);
+        `, appParams);
 
         // Monthly application and offer trends
         const [monthlyTrend] = await pool.query(`
@@ -444,16 +441,16 @@ router.get('/analytics', async (req, res) => {
                 COALESCE(app_months.applications, 0) AS applications,
                 COALESCE(offer_months.offers, 0) AS offers
             FROM (
-                SELECT MONTH(applied_date) AS monthIdx, DATE_FORMAT(applied_date, '%b') AS label, COUNT(*) AS applications
-                FROM APPLICATION
-                WHERE applied_date IS NOT NULL ${year !== 'all' ? 'AND YEAR(applied_date) = ?' : ''}
-                GROUP BY MONTH(applied_date), DATE_FORMAT(applied_date, '%b')
+                SELECT MONTH(a.applied_date) AS monthIdx, DATE_FORMAT(a.applied_date, '%b') AS label, COUNT(*) AS applications
+                FROM APPLICATION a JOIN STUDENT s ON a.s_id = s.s_id
+                WHERE a.applied_date IS NOT NULL ${year !== 'all' ? 'AND s.graduation_yr = ?' : ''}
+                GROUP BY MONTH(a.applied_date), DATE_FORMAT(a.applied_date, '%b')
             ) app_months
             LEFT JOIN (
-                SELECT MONTH(recorded_on) AS monthIdx, DATE_FORMAT(recorded_on, '%b') AS label, COUNT(*) AS offers
-                FROM PLACEMENT_RECORD
-                WHERE recorded_on IS NOT NULL ${year !== 'all' ? 'AND academic_year = ?' : ''}
-                GROUP BY MONTH(recorded_on), DATE_FORMAT(recorded_on, '%b')
+                SELECT MONTH(pr.recorded_on) AS monthIdx, DATE_FORMAT(pr.recorded_on, '%b') AS label, COUNT(*) AS offers
+                FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id
+                WHERE pr.recorded_on IS NOT NULL ${year !== 'all' ? 'AND s.graduation_yr = ?' : ''}
+                GROUP BY MONTH(pr.recorded_on), DATE_FORMAT(pr.recorded_on, '%b')
             ) offer_months ON app_months.monthIdx = offer_months.monthIdx
             UNION
             SELECT 
@@ -462,16 +459,16 @@ router.get('/analytics', async (req, res) => {
                 COALESCE(app_months.applications, 0) AS applications,
                 COALESCE(offer_months.offers, 0) AS offers
             FROM (
-                SELECT MONTH(applied_date) AS monthIdx, DATE_FORMAT(applied_date, '%b') AS label, COUNT(*) AS applications
-                FROM APPLICATION
-                WHERE applied_date IS NOT NULL ${year !== 'all' ? 'AND YEAR(applied_date) = ?' : ''}
-                GROUP BY MONTH(applied_date), DATE_FORMAT(applied_date, '%b')
+                SELECT MONTH(a.applied_date) AS monthIdx, DATE_FORMAT(a.applied_date, '%b') AS label, COUNT(*) AS applications
+                FROM APPLICATION a JOIN STUDENT s ON a.s_id = s.s_id
+                WHERE a.applied_date IS NOT NULL ${year !== 'all' ? 'AND s.graduation_yr = ?' : ''}
+                GROUP BY MONTH(a.applied_date), DATE_FORMAT(a.applied_date, '%b')
             ) app_months
             RIGHT JOIN (
-                SELECT MONTH(recorded_on) AS monthIdx, DATE_FORMAT(recorded_on, '%b') AS label, COUNT(*) AS offers
-                FROM PLACEMENT_RECORD
-                WHERE recorded_on IS NOT NULL ${year !== 'all' ? 'AND academic_year = ?' : ''}
-                GROUP BY MONTH(recorded_on), DATE_FORMAT(recorded_on, '%b')
+                SELECT MONTH(pr.recorded_on) AS monthIdx, DATE_FORMAT(pr.recorded_on, '%b') AS label, COUNT(*) AS offers
+                FROM PLACEMENT_RECORD pr JOIN STUDENT s ON pr.s_id = s.s_id
+                WHERE pr.recorded_on IS NOT NULL ${year !== 'all' ? 'AND s.graduation_yr = ?' : ''}
+                GROUP BY MONTH(pr.recorded_on), DATE_FORMAT(pr.recorded_on, '%b')
             ) offer_months ON app_months.monthIdx = offer_months.monthIdx
             ORDER BY monthIdx
         `, year !== 'all' ? [appParams[0], appParams[0], appParams[0], appParams[0]] : []);

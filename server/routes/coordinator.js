@@ -642,7 +642,7 @@ router.get('/student/:id/profile', async (req, res) => {
         
         // Fetch student profile details but ensure s/he belongs to this coord
         const [studentRows] = await pool.query(`
-            SELECT s.*, pc.name as coordinator_name, pc.email as coordinator_email 
+            SELECT s.*, d.dept_name AS dept, pc.name as coordinator_name, pc.email as coordinator_email 
             FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
             WHERE s.s_id = ? AND s.coord_id = ?
         `, [studentId, coordId]);
