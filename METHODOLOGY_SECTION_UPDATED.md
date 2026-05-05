@@ -884,3 +884,456 @@ Additional indexes created based on query patterns:
 ## 3.5 Summary
 
 The relational schema design for the Student Placement Database Management System represents a comprehensive and normalized data model spanning 22 tables across five operational domains. Each table is carefully designed to satisfy Boyce-Codd Normal Form (BCNF) and Third Normal Form (3NF) compliance, which represent the highest standards of database normalization. The schema eliminates all identified functional dependencies, transitive dependencies, and derived data redundancies. Foreign key constraints enforce referential integrity. ACID-compliant transactions ensure data consistency. Strategic indexing supports high-performance dashboard analytics. All multi-valued attributes have been normalized into separate mapping tables, eliminating update, insertion, and deletion anomalies. Derived data columns have been replaced with SQL Views that calculate values dynamically at query time, ensuring 100% accuracy. The result is a scalable, maintainable, auditable, and production-ready database architecture suitable for enterprise-level student placement management.
+
+---
+
+## 3.6 Implementation
+
+### 3.6.1 Technology Stack
+
+The Student Placement Cell Database Management System is built as a three-tier full-stack web application. The technology stack was selected for performance, scalability, and ease of development.
+
+| Layer | Technology | Version | Purpose |
+|---|---|---|---|
+| **Frontend** | Vanilla HTML5, CSS3, JavaScript (ES Modules) | — | UI rendering, user interaction, dashboard views |
+| **Build Tool** | Vite | ^8.0.8 | Fast dev server, module bundling, hot reload, API proxy |
+| **Backend Runtime** | Node.js with Express.js | ^5.2.1 | RESTful API server, middleware, route handling |
+| **Database** | MySQL (Aiven Cloud) | 8.x | Relational data storage, views, triggers, stored procedures |
+| **DB Driver** | mysql2/promise | ^3.22.0 | Async/await MySQL connection pooling with SSL |
+| **Authentication** | JSON Web Tokens (JWT) + SHA-256 | ^9.0.3 | Stateless authentication, session management |
+| **File Handling** | Multer | ^2.1.1 | PDF resume upload and storage management |
+| **PDF Parsing** | pdf-parse | ^2.4.5 | Extracting raw text from uploaded student resumes |
+| **Real-time Push** | Server-Sent Events (SSE) | Native | Live notifications pushed to coordinator/student portals |
+| **Process Manager** | concurrently | ^9.2.1 | Runs Vite frontend and Node.js backend simultaneously |
+
+The system runs concurrently on two ports: the Vite development server on port **5173** (frontend) and the Express API server on port **3001** (backend). Vite's built-in proxy rewrites all `/api/*` requests to `http://127.0.0.1:3001`, eliminating CORS issues in development.
+
+---
+
+### 3.6.2 System Architecture
+
+The system follows a **3-Tier Client-Server Architecture**:
+
+```
+┌─────────────────────────────────────────────┐
+│              PRESENTATION TIER              │
+│   HTML5 + CSS3 + Vanilla JS (Vite Dev)     │
+│   Three Portals: Student | Coordinator | Admin │
+└───────────────────┬─────────────────────────┘
+                    │ HTTP/REST API (port 5173 → proxy → 3001)
+┌───────────────────▼─────────────────────────┐
+│               APPLICATION TIER             │
+│      Node.js + Express.js (port 3001)      │
+│  14 Route Modules | JWT Middleware | SSE   │
+│  Multer | pdf-parse | ATS Scoring Engine   │
+└───────────────────┬─────────────────────────┘
+                    │ mysql2/promise (SSL, Connection Pool)
+┌───────────────────▼─────────────────────────┐
+│                 DATA TIER                   │
+│         MySQL 8.x (Aiven Cloud)            │
+│  22 Tables | 6 Views | 1 Trigger | 2 Stored │
+│  Procedures | Indexes | ACID Transactions  │
+└─────────────────────────────────────────────┘
+```
+
+**Three User Portals:**
+- **Student Portal** — Job browsing, application submission, resume ATS analysis, offer acceptance, chat with coordinator.
+- **Coordinator Portal** — Application review, interview scheduling, status updates, student management.
+- **CGDC Admin Portal** — Company management, placement analytics, report generation, user oversight.
+
+All three portals share a single login endpoint (`POST /api/auth/login`) and are differentiated by the `role` field embedded inside the JWT token.
+
+---
+
+### 3.6.3 Database Connection and Pooling
+
+The database connection is managed via a **connection pool** using `mysql2/promise`. The pool is configured with:
+
+- `connectionLimit: 30` — maximum simultaneous connections
+- `enableKeepAlive: true` — prevents idle connection timeouts on cloud-hosted DB
+- `ssl: { rejectUnauthorized: false }` — encrypted connections to Aiven cloud MySQL
+- `timezone: 'Z'` — UTC timezone standardization
+
+```javascript
+// server/db.js — Connection Pool Configuration
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 3306,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 30,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    ssl: { rejectUnauthorized: false },
+    timezone: 'Z'
+});
+```
+
+All sensitive credentials (host, port, user, password, JWT secret) are stored in `server/.env` and never committed to version control.
+
+---
+
+### 3.6.4 RESTful API Structure
+
+The backend exposes 14 route modules mounted under the `/api` namespace:
+
+| Route Prefix | File | Responsibility |
+|---|---|---|
+| `/api/auth` | auth.js | Login, JWT generation |
+| `/api/students` | students.js | Student CRUD, profile management |
+| `/api/companies` | companies.js | Company listings |
+| `/api/applications` | applications.js | Apply, withdraw, accept offer |
+| `/api/jobs` | jobs.js | Job profile listings |
+| `/api/resumes` | resumes.js | PDF upload, ATS analysis |
+| `/api/analytics` | analytics.js | Placement statistics, trends |
+| `/api/views` | views.js | SQL view query results |
+| `/api/procedures` | procedures.js | Stored procedure execution |
+| `/api/coordinator` | coordinator.js | Interview scheduling, status updates |
+| `/api/admin` | admin.js | Admin-level data management |
+| `/api/chat` | chat.js | Student–Coordinator messaging |
+| `/api/notifications` | notifications.js | Read/write notification records |
+| `/api/queries` | queries.js | Advanced SQL query explorer |
+
+Every protected route uses the `requireAuth` middleware which validates the JWT from the `Authorization` header and attaches `req.user` (role, entityId, email) before proceeding.
+
+---
+
+### 3.6.5 Database Views Implemented
+
+Six SQL views are used by the application to avoid joining multiple tables in application code:
+
+| View Name | Purpose |
+|---|---|
+| `vw_application_full_details` | Joins APPLICATION + STUDENT + JOB_PROFILE + COMPANY for complete application data |
+| `vw_company_stats` | Calculates average package, total placements per company dynamically |
+| `vw_visit_placement_stats` | Counts placements per company visit year without stored derived columns |
+| `vw_student_placement_summary` | Student profile + offer + placement record joined view |
+| `vw_active_jobs` | Filters JOB_PROFILE to only open listings with valid deadlines |
+| `vw_coordinator_dashboard` | Coordinator-specific application and interview overview |
+
+---
+
+### 3.6.6 Trigger: Automated Audit Logging
+
+A database trigger `trg_application_audit` fires automatically **AFTER UPDATE** on the APPLICATION table. Every status change is permanently written to STATUS_AUDIT_LOG without any application-layer code:
+
+```sql
+CREATE TRIGGER trg_application_audit
+AFTER UPDATE ON APPLICATION
+FOR EACH ROW
+BEGIN
+    IF OLD.status <> NEW.status THEN
+        INSERT INTO STATUS_AUDIT_LOG (app_id, old_status, new_status, changed_at)
+        VALUES (NEW.app_id, OLD.status, NEW.status, NOW());
+    END IF;
+END;
+```
+
+This provides a tamper-evident audit trail. Even if a developer bypasses application code and runs a direct SQL UPDATE, the trigger still fires and records the change.
+
+---
+
+### 3.6.7 Real-Time Notifications Using Server-Sent Events (SSE)
+
+The system implements real-time push notifications using **Server-Sent Events** rather than WebSockets, for simplicity and compatibility:
+
+1. On login, each client opens a persistent HTTP connection to `GET /api/stream?userId=<email>`.
+2. The server registers the client's response stream in an in-memory `Map<userId, res>`.
+3. When a significant event occurs (e.g., student applies for a job), the backend:
+   - Inserts a row into the NOTIFICATION table.
+   - Calls `notifyUser(coordinatorEmail, event, payload)` which writes SSE data to the open stream.
+4. The frontend listens on the `EventSource` object and displays the badge/toast immediately.
+
+---
+
+### 3.6.8 Algorithm 1: Student Job Application Submission
+
+**Description:** When a student submits an application for a job, the system must validate eligibility, prevent duplicate submissions, and atomically insert the record. A concurrency lock (`FOR UPDATE`) is used to prevent race conditions on the job profile's eligibility criteria.
+
+**Input:**
+- `student_id` — Extracted from validated JWT token
+- `job_id` — Submitted by the student via the frontend form
+
+**Output:**
+- Success: Application record inserted in APPLICATION table with status `'under_review'`
+- Failure: Appropriate error message (ineligible, duplicate, or job not found)
+
+**Steps:**
+
+- **Step 1:** Validate the JWT and extract `student_id` from `req.user.entityId`.
+- **Step 2:** Query the STUDENT table to check `profile_status`. If status is `'placed'` or `'opted_out'`, reject the request with HTTP 403.
+- **Step 3:** Acquire a row-level lock on JOB_PROFILE using `SELECT ... FOR UPDATE` to freeze eligibility criteria during the check.
+- **Step 4:** Fetch the student's `cgpa` from the STUDENT table. Compare against `eligibility_cgpa` from JOB_PROFILE. If `student_cgpa < eligibility_cgpa`, reject with HTTP 403 and descriptive error message.
+- **Step 5:** Query APPLICATION table for an existing record with the same `(s_id, job_id)`. If found, reject with HTTP 400 ("Already applied").
+- **Step 6:** Execute `INSERT INTO APPLICATION (s_id, job_id, applied_date, status) VALUES (?, ?, CURDATE(), 'under_review')`.
+- **Step 7:** Query STUDENT, JOB_PROFILE, COMPANY, and PLACEMENT_COORDINATOR to build a notification message.
+- **Step 8:** Insert a row into NOTIFICATION table for the assigned coordinator.
+- **Step 9:** Push a real-time SSE event to the coordinator's active browser session.
+- **Step 10:** Return HTTP 200 with `{ message: 'application submitted' }`.
+
+```
+Algorithm: STUDENT_APPLICATION_SUBMIT(student_id, job_id)
+─────────────────────────────────────────────────────────
+INPUT  : student_id (from JWT), job_id (from request body)
+OUTPUT : Success or Error response
+
+BEGIN
+  student ← QUERY("SELECT profile_status FROM STUDENT WHERE s_id = ?", student_id)
+  IF student.profile_status IN ('placed', 'opted_out') THEN
+    RETURN Error(403, "Already placed or opted out")
+  END IF
+
+  job ← QUERY("SELECT eligibility_cgpa FROM JOB_PROFILE WHERE job_id = ? FOR UPDATE", job_id)
+  IF job NOT FOUND THEN RETURN Error(404, "Job not found") END IF
+
+  studentData ← QUERY("SELECT cgpa FROM STUDENT WHERE s_id = ?", student_id)
+  IF studentData.cgpa < job.eligibility_cgpa THEN
+    RETURN Error(403, "CGPA does not meet criteria")
+  END IF
+
+  existing ← QUERY("SELECT app_id FROM APPLICATION WHERE s_id = ? AND job_id = ?",
+                    student_id, job_id)
+  IF existing FOUND THEN RETURN Error(400, "Already applied") END IF
+
+  EXECUTE("INSERT INTO APPLICATION (s_id, job_id, applied_date, status)
+           VALUES (?, ?, CURDATE(), 'under_review')", student_id, job_id)
+
+  NOTIFY coordinator via NOTIFICATION table and SSE push
+
+  RETURN Success(200, "Application submitted")
+END
+```
+
+---
+
+### 3.6.9 Algorithm 2: Resume Upload and ATS Scoring
+
+**Description:** A student uploads a PDF resume and selects a target job role. The system extracts text from the PDF, runs a keyword-matching algorithm against a role-specific keyword dictionary, calculates an ATS score, and saves the results to the RESUME table.
+
+**Input:**
+- `resume` — Uploaded PDF file (multipart/form-data, max 5 MB)
+- `jobRole` — Selected target job role (e.g., "Software Engineer", "Data Analyst")
+- `versionLabel` — Optional label for resume versioning (e.g., "v1", "v2")
+
+**Output:**
+- `ats_score` — Numerical ATS score (0–100)
+- `grade` — Letter grade (A, B, C, D)
+- `foundKeywords` — List of matched keywords
+- `missingKeywords` — List of keywords not found in resume
+- Stored row in RESUME table with all ATS results
+
+**Steps:**
+
+- **Step 1:** Validate JWT; confirm the user has role `'student'`.
+- **Step 2:** Receive PDF via Multer middleware; validate MIME type is `application/pdf`. Reject non-PDF files.
+- **Step 3:** Read file buffer from disk and pass to `pdf-parse` library to extract raw text string.
+- **Step 4:** Validate extracted text length ≥ 50 characters. If too short or unreadable (scanned image), reject and delete temp file.
+- **Step 5:** Pass `(resumeText, jobRole)` to `calculateATSScore()` function in `server/utils/atsScoring.js`.
+  - Sub-step 5a: Tokenize resume text to lowercase words.
+  - Sub-step 5b: Load role-specific required keyword list for the selected `jobRole`.
+  - Sub-step 5c: For each keyword in the list, check if it appears in the token set.
+  - Sub-step 5d: Calculate `matchPercentage = (foundCount / totalKeywords) × 100`.
+  - Sub-step 5e: Apply weighted bonus scoring for structure checks (sections like "Education", "Projects", "Skills").
+  - Sub-step 5f: Assign letter grade: A (≥80%), B (≥65%), C (≥50%), D (<50%).
+- **Step 6:** Dynamically check if `role_targeted`, `keywords_found`, `keywords_missing` columns exist in RESUME table.
+- **Step 7:** Execute `INSERT INTO RESUME` with `s_id`, `file_url`, `ats_score`, `uploaded_on`, `version_label`, `keywords_found (JSON)`, `keywords_missing (JSON)`.
+- **Step 8:** Delete the temporary uploaded file from disk.
+- **Step 9:** Return JSON response with score, grade, breakdown, foundKeywords, missingKeywords, and resume_id.
+
+```
+Algorithm: ATS_RESUME_SCORE(pdf_file, jobRole, student_id)
+──────────────────────────────────────────────────────────
+INPUT  : pdf_file (binary), jobRole (string), student_id (int)
+OUTPUT : ats_score, grade, foundKeywords, missingKeywords, resume_id
+
+BEGIN
+  VALIDATE file.mimetype == 'application/pdf'
+  resumeText ← PDF_PARSE(pdf_file).extractText()
+  IF LENGTH(resumeText) < 50 THEN
+    DELETE temp file
+    RETURN Error(400, "Unreadable PDF")
+  END IF
+
+  keywordList ← LOAD_KEYWORDS_FOR_ROLE(jobRole)
+  foundKeywords   ← []
+  missingKeywords ← []
+
+  FOR EACH keyword IN keywordList DO
+    IF keyword IN LOWERCASE(resumeText) THEN
+      APPEND keyword TO foundKeywords
+    ELSE
+      APPEND keyword TO missingKeywords
+    END IF
+  END FOR
+
+  matchPercentage ← (COUNT(foundKeywords) / COUNT(keywordList)) × 100
+  bonusScore      ← CHECK_RESUME_SECTIONS(resumeText)   // Education, Skills, etc.
+  ats_score       ← MIN(100, matchPercentage + bonusScore)
+  grade           ← ASSIGN_GRADE(ats_score)             // A/B/C/D
+
+  EXECUTE INSERT INTO RESUME (s_id, file_url, ats_score, keywords_found,
+                              keywords_missing, role_targeted, version_label)
+
+  RETURN { ats_score, grade, foundKeywords, missingKeywords, resume_id }
+END
+```
+
+---
+
+### 3.6.10 Algorithm 3: Application Status Update and Offer Acceptance
+
+**Description:** When a student accepts a job offer, the system must atomically execute several operations inside a single database transaction: lock the job to check vacancy count, decrement vacancies, update the OFFER record, mark the APPLICATION as selected, update the student's `profile_status` to `'placed'`, and create a PLACEMENT_RECORD. A COMMIT or ROLLBACK ensures all-or-nothing consistency.
+
+**Input:**
+- `student_id` — From JWT
+- `job_id` — From request body
+
+**Output:**
+- Student marked as `'placed'` in STUDENT table
+- OFFER record created/updated to `'accepted'`
+- APPLICATION status set to `'selected'`
+- New row inserted in PLACEMENT_RECORD
+- Admin notification sent
+
+**Steps:**
+
+- **Step 1:** Validate JWT; confirm role is `'student'`.
+- **Step 2:** Begin database transaction (`conn.beginTransaction()`).
+- **Step 3:** Check STUDENT.profile_status. If already `'placed'`, roll back and return error.
+- **Step 4:** Acquire row-level lock on JOB_PROFILE using `SELECT ... FOR UPDATE` to prevent concurrent over-acceptance.
+- **Step 5:** Check `vacancies` count. If `vacancies ≤ 0`, roll back and return error "Vacancy limit reached".
+- **Step 6:** Decrement vacancies: `UPDATE JOB_PROFILE SET vacancies = vacancies - 1 WHERE job_id = ?`.
+- **Step 7:** Insert or update OFFER record to `offer_status = 'accepted'`.
+- **Step 8:** Update APPLICATION: `SET status = 'selected'`.
+- **Step 9:** Update STUDENT: `SET profile_status = 'placed'`.
+- **Step 10:** Insert PLACEMENT_RECORD with `s_id`, `comp_id`, `academic_year`, `salary_offered`, `status = 'confirmed'`.
+- **Step 11:** Commit transaction (`conn.commit()`).
+- **Step 12:** After commit, asynchronously notify all CGDC Admins via NOTIFICATION table about the placement event.
+- **Step 13:** Return HTTP 200: "Offer accepted successfully! You are now marked as PLACED."
+
+```
+Algorithm: ACCEPT_OFFER(student_id, job_id)
+────────────────────────────────────────────
+INPUT  : student_id (from JWT), job_id (from request body)
+OUTPUT : Atomic placement record creation + notifications
+
+BEGIN
+  conn ← GET_DB_CONNECTION()
+  conn.BEGIN_TRANSACTION()
+
+  TRY
+    student ← QUERY("SELECT profile_status FROM STUDENT WHERE s_id = ?", student_id)
+    IF student.profile_status == 'placed' THEN
+      RAISE Error("Already accepted an offer")
+    END IF
+
+    job ← QUERY("SELECT package, vacancies FROM JOB_PROFILE WHERE job_id = ? FOR UPDATE", job_id)
+    IF job.vacancies <= 0 THEN
+      RAISE Error("Vacancy limit reached")
+    END IF
+
+    EXECUTE("UPDATE JOB_PROFILE SET vacancies = vacancies - 1 WHERE job_id = ?", job_id)
+    UPSERT OFFER SET offer_status = 'accepted' WHERE s_id = ? AND job_id = ?
+    UPDATE APPLICATION SET status = 'selected' WHERE s_id = ? AND job_id = ?
+    UPDATE STUDENT SET profile_status = 'placed' WHERE s_id = ?
+    INSERT INTO PLACEMENT_RECORD (s_id, comp_id, academic_year, salary_offered, status)
+
+    conn.COMMIT()
+    NOTIFY all CGDC_ADMIN rows via NOTIFICATION table
+    RETURN Success(200, "Offer accepted. Student is now PLACED.")
+
+  CATCH error
+    conn.ROLLBACK()
+    RETURN Error(500, error.message)
+
+  FINALLY
+    conn.RELEASE()
+  END TRY
+END
+```
+
+---
+
+### 3.6.11 Algorithm 4: Application Withdrawal with Atomic Cleanup
+
+**Description:** When a student withdraws an application, the system must atomically update the application status and cancel all upcoming interviews for that specific job — ensuring the database is never left in a partially-updated state.
+
+**Input:**
+- `student_id` — From JWT
+- `job_id` — From request body
+
+**Output:**
+- APPLICATION status set to `'withdrawn'`
+- All future INTERVIEW rows for `(s_id, job_id)` deleted
+- COMMIT on success / ROLLBACK on failure
+
+**Steps:**
+
+- **Step 1:** Validate JWT; confirm role is `'student'`.
+- **Step 2:** Begin database transaction.
+- **Step 3:** Query APPLICATION with `FOR UPDATE` lock to get current status.
+- **Step 4:** If application not found, raise error "Application not found".
+- **Step 5:** If status is `'selected'` or `'placed'`, raise error "Cannot withdraw a selected application".
+- **Step 6:** Execute `UPDATE APPLICATION SET status = 'withdrawn'`.
+- **Step 7:** Execute `DELETE FROM INTERVIEW WHERE s_id = ? AND job_id = ? AND interview_date >= CURDATE()` — removes only future interviews.
+- **Step 8:** Commit transaction.
+- **Step 9:** Return HTTP 200: "Application withdrawn and interviews cancelled."
+
+```
+Algorithm: WITHDRAW_APPLICATION(student_id, job_id)
+────────────────────────────────────────────────────
+INPUT  : student_id (from JWT), job_id (from request body)
+OUTPUT : Application withdrawn, upcoming interviews deleted
+
+BEGIN
+  conn ← GET_DB_CONNECTION()
+  conn.BEGIN_TRANSACTION()
+
+  TRY
+    app ← QUERY("SELECT status FROM APPLICATION
+                 WHERE s_id = ? AND job_id = ? FOR UPDATE", student_id, job_id)
+
+    IF app NOT FOUND THEN RAISE Error("Application not found") END IF
+
+    IF app.status IN ('selected', 'placed') THEN
+      RAISE Error("Cannot withdraw a selected application")
+    END IF
+
+    EXECUTE("UPDATE APPLICATION SET status = 'withdrawn'
+             WHERE s_id = ? AND job_id = ?", student_id, job_id)
+
+    EXECUTE("DELETE FROM INTERVIEW
+             WHERE s_id = ? AND job_id = ? AND interview_date >= CURDATE()",
+             student_id, job_id)
+
+    conn.COMMIT()
+    RETURN Success(200, "Application withdrawn and interviews cancelled.")
+
+  CATCH error
+    conn.ROLLBACK()
+    RETURN Error(500, error.message)
+
+  FINALLY
+    conn.RELEASE()
+  END TRY
+END
+```
+
+---
+
+### 3.6.12 Security Implementation
+
+The system implements multiple layers of security:
+
+| Security Mechanism | Implementation Detail |
+|---|---|
+| **Password Hashing** | Passwords stored as SHA-256 hash in `USER_ROLE.password_hash`. Plain-text passwords never stored. |
+| **JWT Authentication** | Every API request requires a valid Bearer token signed with `process.env.JWT_SECRET`. Tokens expire in 24 hours. |
+| **Role-Based Access Control (RBAC)** | `requireAuth` middleware extracts role from JWT. Each route checks `req.user.role` before executing. Students cannot access coordinator/admin routes. |
+| **SQL Injection Prevention** | All SQL queries use parameterized statements (`pool.query('... WHERE id = ?', [id])`). No string concatenation in queries. |
+| **File Upload Security** | Multer validates MIME type (`application/pdf` only). File size limit: 5 MB. Temp files deleted after processing. |
+| **Environment Secrets** | DB credentials and JWT secret stored in `.env` files, excluded from git via `.gitignore`. |
+| **CORS Configuration** | Express CORS middleware configured with `origin: true, credentials: true` for controlled cross-origin access. |
+| **Concurrency Locking** | Critical operations (apply, accept offer) use MySQL `FOR UPDATE` row-level locks to prevent race conditions. |

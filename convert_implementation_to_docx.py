@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert METHODOLOGY_SECTION_UPDATED.md to formatted DOCX with proper styling.
+Convert IMPLEMENTATION_SECTION_3_6.md to formatted DOCX with proper styling.
 Tables formatted with light blue headers and alternating row colors.
 Font: Times New Roman 11pt
 """
@@ -22,11 +22,6 @@ def set_cell_background(cell, fill_color):
     shading_elm = OxmlElement('w:shd')
     shading_elm.set(qn('w:fill'), fill_color)
     cell._element.get_or_add_tcPr().append(shading_elm)
-
-def format_text_color(paragraph, color_hex="000000"):
-    """Format text color for a paragraph"""
-    for run in paragraph.runs:
-        run.font.color.rgb = RGBColor(int(color_hex[0:2], 16), int(color_hex[2:4], 16), int(color_hex[4:6], 16))
 
 def read_markdown_file(filepath):
     """Read the markdown file"""
@@ -227,10 +222,10 @@ def create_docx_from_markdown(markdown_path, docx_path):
     
     # Save document
     doc.save(docx_path)
-    print(f"[OK] DOCX file created: {docx_path}")
+    print(f"✓ DOCX file created: {docx_path}")
 
 if __name__ == "__main__":
-    markdown_file = r"c:\Users\awast\OneDrive\Desktop\Sem-4\Student_Placement_Cell_Database_Management_System\METHODOLOGY_SECTION_UPDATED.md"
-    docx_file = r"c:\Users\awast\OneDrive\Desktop\Sem-4\Student_Placement_Cell_Database_Management_System\METHODOLOGY_SECTION_FORMATTED.docx"
+    markdown_file = r"c:\Users\awast\OneDrive\Desktop\Sem-4\Student_Placement_Cell_Database_Management_System\IMPLEMENTATION_SECTION_3_6.md"
+    docx_file = r"c:\Users\awast\OneDrive\Desktop\Sem-4\Student_Placement_Cell_Database_Management_System\IMPLEMENTATION_SECTION_3_6.docx"
     
     create_docx_from_markdown(markdown_file, docx_file)

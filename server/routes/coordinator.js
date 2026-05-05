@@ -118,24 +118,13 @@ router.get('/dashboard', async (req, res) => {
 
         const placementRate = tStudents > 0 ? ((tPlaced / tStudents) * 100).toFixed(1) : '0.0';
 
-        // Tiers for charts (for companies where this coord's students applied)
+        // Tiers for charts (for all companies to match admin dashboard)
         const [tiers] = await pool.query(`
-            SELECT COALESCE(c.tier, 'Unknown') AS label, COUNT(DISTINCT c.comp_id) AS value
-            FROM APPLICATION a
-            JOIN STUDENT s ON a.s_id = s.s_id
-            JOIN JOB_PROFILE j ON a.job_id = j.job_id
-            JOIN COMPANY c ON j.comp_id = c.comp_id
-            WHERE s.coord_id = ?
-            GROUP BY COALESCE(c.tier, 'Unknown')
+            SELECT COALESCE(tier, 'Unknown') AS label, COUNT(*) AS value
+            FROM COMPANY
+            GROUP BY COALESCE(tier, 'Unknown')
             ORDER BY value DESC
-        `, [id]);
-
-        const tierColors = {
-            'Tier-1': '#10b981',
-            'Tier-2': '#3b82f6',
-            'Tier-3': '#f59e0b',
-            'Unknown': '#94a3b8'
-        };
+        `);
 
         const recordsData = records.map(r => ({
             initials: (r.student || 'U S').split(' ').filter(p => p.length > 0).slice(0, 2).map(n => n[0]).join('').toUpperCase() || '??',
@@ -160,10 +149,10 @@ router.get('/dashboard', async (req, res) => {
                 labels: trend.map(t => t.label),
                 placements: trend.map(t => t.placements)
             },
-            tiers: tiers.map(t => ({
+            tiers: tiers.map((t, index) => ({
                 label: t.label,
                 value: t.value,
-                color: tierColors[t.label] || tierColors['Unknown']
+                color: ['#0f2f61', '#4a6296', '#f2cf9e', '#7c8fa5'][index % 4]
             })),
             departments: departments,
             topCompanies: topCompanies,
