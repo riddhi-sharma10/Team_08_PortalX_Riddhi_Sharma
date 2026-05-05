@@ -1,3 +1,5 @@
+import { Navbar } from './navbar.js';
+
 export const Sidebar = {
     render(role, app) {
         const sidebar = document.getElementById('sidebar');
@@ -48,6 +50,7 @@ export const Sidebar = {
 
         sidebar.querySelectorAll('.nav-item[data-page]').forEach(item => {
             item.addEventListener('click', () => {
+                if (Navbar.resetSearch) Navbar.resetSearch();
                 app.navigateTo(item.dataset.page);
             });
         });
