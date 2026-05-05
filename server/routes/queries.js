@@ -464,7 +464,9 @@ const QUERY_REGISTRY = {
         sql: `
             SELECT pc.name as coordinator_name, cd.dept_name as coordinator_dept, s.*, d.dept_name as dept
             FROM STUDENT s
+            LEFT JOIN DEPARTMENT d ON s.dept_id = d.dept_id
             LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            LEFT JOIN DEPARTMENT cd ON pc.dept_id = cd.dept_id
             ORDER BY s.s_name ASC
         `,
         roles: ['admin'],
@@ -476,6 +478,7 @@ const QUERY_REGISTRY = {
         sql: `
             SELECT s.s_name, s.email, d.dept_name as dept, s.cgpa, j.role as applied_role, a.status, a.applied_date
             FROM STUDENT s
+            JOIN DEPARTMENT d ON s.dept_id = d.dept_id
             JOIN APPLICATION a ON s.s_id = a.s_id
             JOIN JOB_PROFILE j ON a.job_id = j.job_id
             WHERE j.comp_id = ?
@@ -551,10 +554,11 @@ const QUERY_REGISTRY = {
         name: 'Highest Placement Depts (IN Subquery)',
         category: 'subquery',
         sql: `
-            SELECT dept, COUNT(*) as placed_count
-            FROM STUDENT
-            WHERE s_id IN (SELECT s_id FROM PLACEMENT_RECORD WHERE status = 'confirmed')
-            GROUP BY dept
+            SELECT d.dept_name as dept, COUNT(*) as placed_count
+            FROM STUDENT s
+            JOIN DEPARTMENT d ON s.dept_id = d.dept_id
+            WHERE s.s_id IN (SELECT s_id FROM PLACEMENT_RECORD WHERE status = 'confirmed')
+            GROUP BY d.dept_name
             ORDER BY placed_count DESC
         `,
         roles: ['admin'],
@@ -567,6 +571,7 @@ const QUERY_REGISTRY = {
             SELECT pc.name, cd.dept_name AS dept, 
                    (SELECT COUNT(*) FROM STUDENT WHERE coord_id = pc.coord_id) as assigned_student_count
             FROM PLACEMENT_COORDINATOR pc
+            LEFT JOIN DEPARTMENT cd ON pc.dept_id = cd.dept_id
             ORDER BY assigned_student_count DESC
         `,
         roles: ['admin'],
