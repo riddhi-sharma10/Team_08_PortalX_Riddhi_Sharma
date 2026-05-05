@@ -54,12 +54,13 @@ router.get('/dashboard', async (req, res) => {
         `);
 
         const [departments] = await pool.query(`
-            SELECT COALESCE(s.dept, 'Unknown') AS name, COUNT(DISTINCT pr.s_id) AS placed
+            SELECT COALESCE(d.dept_name, 'Unknown') AS name, COUNT(DISTINCT pr.s_id) AS placed
             FROM PLACEMENT_RECORD pr
             JOIN STUDENT s ON s.s_id = pr.s_id
-            GROUP BY COALESCE(s.dept, 'Unknown')
+            JOIN DEPARTMENT d ON s.dept_id = d.dept_id
+            GROUP BY COALESCE(d.dept_name, 'Unknown')
             ORDER BY placed DESC
-            LIMIT 3
+            LIMIT 5
         `);
 
         const [topCompanies] = await pool.query(`
@@ -75,7 +76,7 @@ router.get('/dashboard', async (req, res) => {
         const [records] = await pool.query(`
             SELECT 
                 s.s_name AS student, 
-                COALESCE(s.dept, 'Unknown') AS department,
+                COALESCE(d.dept_name, 'Unknown') AS department,
                 CASE 
                     WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN '-'
                     WHEN best_pr.comp_id IS NOT NULL THEN COALESCE(c.comp_name, '-')
@@ -96,7 +97,7 @@ router.get('/dashboard', async (req, res) => {
                     ELSE 'active'
                 END AS status,
                 s.graduation_yr AS graduation_yr
-            FROM STUDENT s
+            FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id
             LEFT JOIN (
                 SELECT pr1.* 
                 FROM PLACEMENT_RECORD pr1
@@ -180,7 +181,7 @@ router.get('/users', async (req, res) => {
                     COALESCE(s.s_name, u.username) AS name,
                     u.username,
                     COALESCE(s.email, CONCAT(u.username, '@university.edu')) AS email,
-                    COALESCE(s.dept, '') AS branch,
+                    COALESCE(d.dept_name, '') AS branch,
                     CONCAT('ST-', LPAD(s.s_id, 4, '0')) AS entityId,
                     s.s_id AS entityIdRaw,
                     CASE 
@@ -194,8 +195,7 @@ router.get('/users', async (req, res) => {
                     'Standard' AS permission,
                     'student' AS role,
                     0 AS lastLoginDays
-                FROM STUDENT s
-                LEFT JOIN USER_ROLE u ON u.entity_id = s.s_id AND u.role = 'student'
+                FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id LEFT JOIN USER_ROLE u ON u.entity_id = s.s_id AND u.role = 'student'
                 LEFT JOIN (
                     SELECT pr1.* 
                     FROM PLACEMENT_RECORD pr1
@@ -220,15 +220,14 @@ router.get('/users', async (req, res) => {
                     COALESCE(c.name, u.username) AS name,
                     u.username,
                     COALESCE(c.email, CONCAT(u.username, '@university.edu')) AS email,
-                    COALESCE(c.dept, '') AS branch,
+                    COALESCE(d.dept_name, '') AS branch,
                     CONCAT('CD-', LPAD(c.coord_id, 3, '0')) AS entityId,
                     c.coord_id AS entityIdRaw,
                     'active' AS status,
                     'Elevated' AS permission,
                     'coordinator' AS role,
                     0 AS lastLoginDays
-                FROM PLACEMENT_COORDINATOR c
-                LEFT JOIN USER_ROLE u ON u.entity_id = c.coord_id AND u.role = 'coordinator'
+                FROM PLACEMENT_COORDINATOR c JOIN DEPARTMENT d ON c.dept_id = d.dept_id LEFT JOIN USER_ROLE u ON u.entity_id = c.coord_id AND u.role = 'coordinator'
             `;
         } else {
             sql = `
@@ -295,7 +294,7 @@ router.get('/records', async (req, res) => {
             SELECT 
                 s.s_id AS id, 
                 s.s_name AS student, 
-                COALESCE(s.dept, 'Unknown') AS department,
+                COALESCE(d.dept_name, 'Unknown') AS department,
                 CASE 
                     WHEN s.profile_status IN ('opted_out', 'not_eligible') THEN '-'
                     WHEN best_pr.comp_id IS NOT NULL THEN COALESCE(c.comp_name, '-')
@@ -316,8 +315,7 @@ router.get('/records', async (req, res) => {
                     ELSE 'Active'
                 END AS status,
                 s.graduation_yr AS appliedYear
-            FROM STUDENT s
-            LEFT JOIN (
+            FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id LEFT JOIN (
                 SELECT pr1.* 
                 FROM PLACEMENT_RECORD pr1
                 JOIN (
@@ -428,14 +426,13 @@ router.get('/analytics', async (req, res) => {
         // Department placement percentages
         const [deptStats] = await pool.query(`
             SELECT
-                COALESCE(s.dept, 'Unknown') AS name,
+                COALESCE(d.dept_name, 'Unknown') AS name,
                 COUNT(DISTINCT s.s_id) AS totalStudents,
                 COUNT(DISTINCT pr.s_id) AS placedCount,
                 AVG(pr.salary_offered) AS avgLpa
-            FROM STUDENT s
-            LEFT JOIN PLACEMENT_RECORD pr ON pr.s_id = s.s_id ${prAnd.replace('WHERE', 'AND pr.')}
+            FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id LEFT JOIN PLACEMENT_RECORD pr ON pr.s_id = s.s_id ${prAnd.replace('WHERE', 'AND pr.')}
             ${studentWhere}
-            GROUP BY COALESCE(s.dept, 'Unknown')
+            GROUP BY COALESCE(d.dept_name, 'Unknown')
             ORDER BY placedCount DESC
         `, year !== 'all' ? [appParams[0], appParams[0]] : []);
 
@@ -651,8 +648,7 @@ router.get('/student/:id/profile', async (req, res) => {
         // Fetch student profile details
         const [studentRows] = await pool.query(`
             SELECT s.*, pc.name as coordinator_name, pc.email as coordinator_email 
-            FROM STUDENT s
-            LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
             WHERE s.s_id = ?
         `, [studentId]);
 
@@ -686,7 +682,7 @@ router.get('/coordinator/:id/profile', async (req, res) => {
         
         // Fetch coordinator profile details
         const [coordRows] = await pool.query(
-            'SELECT name, email, phone_no, dept, cgdc_id FROM PLACEMENT_COORDINATOR WHERE coord_id = ?',
+            'SELECT c.name, c.email, c.phone_no, d.dept_name as dept, c.cgdc_id FROM PLACEMENT_COORDINATOR c JOIN DEPARTMENT d ON c.dept_id = d.dept_id WHERE c.coord_id = ?',
             [coordId]
         );
 
@@ -695,10 +691,11 @@ router.get('/coordinator/:id/profile', async (req, res) => {
 
         // Fetch students assigned to this coordinator
         const [students] = await pool.query(`
-            SELECT s_id, s_name, email, dept, cgpa, profile_status
-            FROM STUDENT
-            WHERE coord_id = ?
-            ORDER BY s_name ASC
+            SELECT s.s_id, s.s_name, s.email, d.dept_name as dept, s.cgpa, s.profile_status
+            FROM STUDENT s
+            JOIN DEPARTMENT d ON s.dept_id = d.dept_id
+            WHERE s.coord_id = ?
+            ORDER BY s.s_name ASC
         `, [coordId]);
 
         // Calculate stats
@@ -727,21 +724,21 @@ router.post('/student', async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-        const { name, email, phone, dob, dept, graduation_yr, cgpa, profile_status, company, packageLpa } = req.body;
+        const { name, email, phone, dob, dept: dept_id, graduation_yr, cgpa, profile_status, company, packageLpa } = req.body;
 
-        if (!name || !email || !dept || !graduation_yr) {
+        if (!name || !email || !dept_id || !graduation_yr) {
             return res.status(400).json({ message: 'Missing required fields' });
         }
 
         const [result] = await conn.query(`
-            INSERT INTO STUDENT (s_name, email, phone, date_of_birth, dept, graduation_yr, cgpa, profile_status)
+            INSERT INTO STUDENT (s_name, email, phone, date_of_birth, dept_id, graduation_yr, cgpa, profile_status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             name,
             email,
             phone || null,
             dob || null,
-            dept,
+            dept_id,
             Number(graduation_yr),
             cgpa ? Number(cgpa) : null,
             profile_status || 'active'
@@ -819,15 +816,15 @@ router.post('/coordinator', async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-        const { name, email, phone_no, dept, cgdc_id } = req.body;
+        const { name, email, phone_no, dept: dept_id, cgdc_id } = req.body;
 
-        if (!name || !email || !dept) {
+        if (!name || !email || !dept_id) {
             return res.status(400).json({ message: 'Missing required fields' });
         }
 
         const [result] = await conn.query(
-            'INSERT INTO PLACEMENT_COORDINATOR (name, email, phone_no, dept, cgdc_id) VALUES (?, ?, ?, ?, ?)',
-            [name, email, phone_no || null, dept, cgdc_id || null]
+            'INSERT INTO PLACEMENT_COORDINATOR (name, email, phone_no, dept_id, cgdc_id) VALUES (?, ?, ?, ?, ?)',
+            [name, email, phone_no || null, dept_id, cgdc_id || null]
         );
         const newId = result.insertId;
 
@@ -935,14 +932,13 @@ router.get('/assignments', async (req, res) => {
             SELECT 
                 s.s_id, 
                 s.s_name, 
-                s.dept, 
+                d.dept_name AS dept, 
                 s.email,
                 s.coord_id,
                 pc.name AS coordinator_name,
                 (SELECT COUNT(*) FROM APPLICATION a WHERE a.s_id = s.s_id) as app_count,
                 s.created_at
-            FROM STUDENT s
-            LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
             WHERE LOWER(s.profile_status) = 'active'
             
             ORDER BY s.created_at DESC, s.s_id DESC

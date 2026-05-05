@@ -8,8 +8,8 @@ const router = express.Router();
 // Get all students
 router.get('/', requireAuth, async (req, res) => {
     try {
-        // Fetch from the STUDENT table
-        const [rows] = await pool.query('SELECT s_id as id, s_name as name, email, phone, dept, cgpa, profile_status as status FROM STUDENT');
+        // Fetch from the STUDENT table and join with DEPARTMENT
+        const [rows] = await pool.query('SELECT s.s_id as id, s.s_name as name, s.email, s.phone, d.dept_name as dept, s.cgpa, s.profile_status as status FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id');
         res.json(rows);
     } catch (err) {
         console.error(err);
@@ -23,8 +23,9 @@ router.get('/profile', requireAuth, async (req, res) => {
 
     try {
         const [rows] = await pool.query(`
-            SELECT s.*, pc.name as coordinator_name, pc.email as coordinator_email, r.file_url as resume_url
+            SELECT s.*, d.dept_name as dept, pc.name as coordinator_name, pc.email as coordinator_email, r.file_url as resume_url
             FROM STUDENT s
+            JOIN DEPARTMENT d ON s.dept_id = d.dept_id
             LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
             LEFT JOIN RESUME r ON s.s_id = r.s_id
             WHERE s.s_id = ?
@@ -91,7 +92,7 @@ router.post('/opt-out', requireAuth, async (req, res) => {
         // --- NOTIFY ADMIN: Student opted out ---
         try {
             const [stuInfo] = await pool.query(
-                'SELECT s_name, dept, email FROM STUDENT WHERE s_id = ?', [student_id]
+                'SELECT s.s_name, d.dept_name as dept, s.email FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id WHERE s.s_id = ?', [student_id]
             );
             if (stuInfo.length > 0) {
                 const s = stuInfo[0];

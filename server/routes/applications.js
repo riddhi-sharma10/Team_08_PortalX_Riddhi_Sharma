@@ -249,9 +249,8 @@ router.post('/accept', requireAuth, async (req, res) => {
         // --- NOTIFY ADMIN: Student has been placed ---
         try {
             const [placedInfo] = await pool.query(
-                `SELECT s.s_name, s.dept, j.role, c.comp_name, j.package
-                 FROM STUDENT s
-                 JOIN JOB_PROFILE j ON j.job_id = ?
+                `SELECT s.s_name, d.dept_name AS dept, j.role, c.comp_name, j.package
+                 FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id JOIN JOB_PROFILE j ON j.job_id = ?
                  JOIN COMPANY c ON c.comp_id = j.comp_id
                  WHERE s.s_id = ?`, [job_id, student_id]
             );

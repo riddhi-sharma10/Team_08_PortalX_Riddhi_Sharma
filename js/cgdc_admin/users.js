@@ -220,11 +220,11 @@ export async function render(container, appOrRefresh = false) {
                             <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Department *</label>
                             <select id="studentDept" required style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
                                 <option value="">Select Department</option>
-                                <option value="Computer Science">Computer Science</option>
-                                <option value="IT">IT</option>
-                                <option value="Electronics">Electronics</option>
-                                <option value="Mechanical">Mechanical</option>
-                                <option value="Civil">Civil</option>
+                                <option value="1">Computer Science</option>
+                                <option value="2">IT</option>
+                                <option value="3">Electronics</option>
+                                <option value="4">Mechanical</option>
+                                <option value="5">Civil</option>
                             </select>
                         </div>
 
@@ -306,11 +306,11 @@ export async function render(container, appOrRefresh = false) {
                             <label style="font-weight: 600; color: var(--text-main); font-size: 0.9rem;">Department *</label>
                             <select id="coordDept" required style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; outline: none;">
                                 <option value="">Select Department</option>
-                                <option value="Computer Science">Computer Science</option>
-                                <option value="IT">IT</option>
-                                <option value="Electronics">Electronics</option>
-                                <option value="Mechanical">Mechanical</option>
-                                <option value="Civil">Civil</option>
+                                <option value="1">Computer Science</option>
+                                <option value="2">IT</option>
+                                <option value="3">Electronics</option>
+                                <option value="4">Mechanical</option>
+                                <option value="5">Civil</option>
                             </select>
                         </div>
                         

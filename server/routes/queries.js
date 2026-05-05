@@ -27,7 +27,7 @@ const QUERY_REGISTRY = {
     'tbl_students': {
         name: 'My Students',
         category: 'table',
-        sql: "SELECT s_id as stu_roll_no, s_name, dept, cgpa, profile_status FROM STUDENT WHERE coord_id = ? AND profile_status = 'placed' ORDER BY dept ASC, s_name ASC",
+        sql: "SELECT s_id as stu_roll_no, s_name, d.dept_name as dept, cgpa, profile_status FROM STUDENT s JOIN DEPARTMENT d ON s.dept_id = d.dept_id WHERE coord_id = ? AND profile_status = 'placed' ORDER BY d.dept_name ASC, s_name ASC",
         roles: ['coordinator'],
         description: 'List of placed students specifically assigned to your care.'
     },
@@ -462,7 +462,7 @@ const QUERY_REGISTRY = {
         name: 'Master Student Directory (with Coordinators)',
         category: 'join',
         sql: `
-            SELECT pc.name as coordinator_name, pc.dept as coordinator_dept, s.*
+            SELECT pc.name as coordinator_name, cd.dept_name as coordinator_dept, s.*, d.dept_name as dept
             FROM STUDENT s
             LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
             ORDER BY s.s_name ASC
@@ -474,7 +474,7 @@ const QUERY_REGISTRY = {
         name: 'Student Applicant Profiles',
         category: 'view',
         sql: `
-            SELECT s.s_name, s.email, s.dept, s.cgpa, j.role as applied_role, a.status, a.applied_date
+            SELECT s.s_name, s.email, d.dept_name as dept, s.cgpa, j.role as applied_role, a.status, a.applied_date
             FROM STUDENT s
             JOIN APPLICATION a ON s.s_id = a.s_id
             JOIN JOB_PROFILE j ON a.job_id = j.job_id
@@ -564,7 +564,7 @@ const QUERY_REGISTRY = {
         name: 'Coordinator Workload Analysis',
         category: 'subquery',
         sql: `
-            SELECT pc.name, pc.dept, 
+            SELECT pc.name, cd.dept_name AS dept, 
                    (SELECT COUNT(*) FROM STUDENT WHERE coord_id = pc.coord_id) as assigned_student_count
             FROM PLACEMENT_COORDINATOR pc
             ORDER BY assigned_student_count DESC

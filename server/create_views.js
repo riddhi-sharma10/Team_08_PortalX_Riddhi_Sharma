@@ -58,15 +58,18 @@ async function createAccuracyViews() {
                 s.s_id, 
                 s.s_name, 
                 s.email, 
-                s.dept, 
+                d.dept_name AS dept, 
                 s.cgpa, 
                 s.graduation_yr, 
                 s.profile_status, 
                 pc.name AS coordinator_name, 
-                pc.dept AS coordinator_dept,
-                s.coord_id
+                cd.dept_name AS coordinator_dept,
+                s.coord_id,
+                s.dept_id
             FROM STUDENT s
+            JOIN DEPARTMENT d ON s.dept_id = d.dept_id
             LEFT JOIN PLACEMENT_COORDINATOR pc ON s.coord_id = pc.coord_id
+            LEFT JOIN DEPARTMENT cd ON pc.dept_id = cd.dept_id
         `);
         console.log('Created: vw_student_details');
 
