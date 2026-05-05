@@ -1,0 +1,7 @@
+ER DIAGRAM OVERVIEW - Student Placement Cell DBMS
+
+The system has 12 entities: CGDC_ADMIN, PLACEMENT_COORDINATOR, STUDENT, COMPANY, JOB_PROFILE, APPLICATION, INTERVIEW, OFFER, PLACEMENT_RECORD, USER_ROLE, RESUME, and STUDENT_SKILL.
+
+CGDC_ADMIN supervises PLACEMENT_COORDINATOR (1:N). PLACEMENT_COORDINATOR coordinates STUDENT (1:N). STUDENT applies to JOB_PROFILE through APPLICATION (M:N). STUDENT attends INTERVIEW (1:N), receives OFFER (1:N), uploads RESUME (1:N), and possesses STUDENT_SKILL (1:N). COMPANY posts JOB_PROFILE (1:N). STUDENT secures PLACEMENT_RECORD (1:N) from COMPANY.
+
+All entities have auto-increment primary keys. Foreign keys enforce referential integrity with CASCADE delete. Database is normalized to 3NF with no redundancy. Supports ACID transactions and real-time analytics through views.
