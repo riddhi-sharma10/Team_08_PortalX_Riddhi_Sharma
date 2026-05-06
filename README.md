@@ -84,6 +84,24 @@ This project extensively utilizes advanced Database Management System (DBMS) con
 
 ---
 
+## 🔑 Test Credentials
+
+For testing purposes, you can use the following default credentials:
+
+### 1. Student Login
+* **Username:** `student_312` (Format: `student_<no>`)
+* **Password:** `stu@2024` (remains the same for all students)
+
+### 2. Coordinator Login
+* **Username:** `coord_1` (Format: `coord_<no>`)
+* **Password:** `coord@2024` (or `co@2024` for all coordinators)
+
+### 3. Admin Login
+* **Username:** `admin_1` (Format: `admin_<no>`)
+* **Password:** `adm@2024` (remains the same for all admins)
+
+---
+
 ## 🚀 Setup & Installation
 
 1. **Clone the repository:**
