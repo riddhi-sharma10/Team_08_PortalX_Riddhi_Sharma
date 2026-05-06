@@ -6,6 +6,8 @@ PortalX is a next-generation, comprehensive Placement Cell Management System tha
 
 From student registration to interview scheduling and real-time placement analytics, PortalX handles it all with seamless efficiency.
 
+**🎥 Video Demonstration:** [Watch the explanation video here](https://drive.google.com/drive/u/0/folders/1gaj6BMKN-SEEa6DxZBMaCAq7DZEAZFx7)
+
 ---
 
 ## ✨ Key Features
