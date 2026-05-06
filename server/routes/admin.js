@@ -695,9 +695,24 @@ router.get('/coordinator/:id/profile', async (req, res) => {
             ORDER BY s.s_name ASC
         `, [coordId]);
 
+        const [placedRow] = await pool.query(
+            `SELECT COUNT(DISTINCT combined_placed.s_id) AS placed FROM (
+                SELECT pr.s_id
+                FROM PLACEMENT_RECORD pr
+                JOIN STUDENT s2 ON pr.s_id = s2.s_id
+                WHERE s2.coord_id = ?
+                UNION
+                SELECT a.s_id
+                FROM APPLICATION a
+                JOIN STUDENT s2 ON a.s_id = s2.s_id
+                WHERE a.status = 'selected' AND s2.coord_id = ?
+            ) AS combined_placed`,
+            [coordId, coordId]
+        );
+
         // Calculate stats
         const totalStudents = students.length;
-        const placedStudents = students.filter(s => String(s.profile_status).toLowerCase() === 'placed').length;
+        const placedStudents = Number(placedRow[0]?.placed || 0);
         const placementRate = totalStudents > 0 ? ((placedStudents / totalStudents) * 100).toFixed(1) : '0.0';
 
         res.json({

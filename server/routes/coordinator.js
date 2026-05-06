@@ -575,19 +575,26 @@ router.get('/profile', async (req, res) => {
         );
         const studentsManaged = Number(studentsRow[0]?.total || 0);
 
-        // Students placed = distinct students with at least one accepted offer
+        // Students placed = distinct students with at least one placement record or selected application
         const [placedRow] = await pool.query(
-            `SELECT COUNT(DISTINCT o.s_id) AS placed
-             FROM OFFER o
-             INNER JOIN STUDENT s ON o.s_id = s.s_id
-             WHERE s.coord_id = ? AND LOWER(o.offer_status) = 'accepted'`,
-            [id]
+            `SELECT COUNT(DISTINCT combined_placed.s_id) AS placed FROM (
+                SELECT pr.s_id
+                FROM PLACEMENT_RECORD pr
+                JOIN STUDENT s2 ON pr.s_id = s2.s_id
+                WHERE s2.coord_id = ?
+                UNION
+                SELECT a.s_id
+                FROM APPLICATION a
+                JOIN STUDENT s2 ON a.s_id = s2.s_id
+                WHERE a.status = 'selected' AND s2.coord_id = ?
+            ) AS combined_placed`,
+            [id, id]
         );
         const studentsPlaced = Number(placedRow[0]?.placed || 0);
 
         const placementRate = studentsManaged > 0
-            ? Math.round((studentsPlaced / studentsManaged) * 100)
-            : 0;
+            ? ((studentsPlaced / studentsManaged) * 100).toFixed(1)
+            : '0.0';
 
         res.json({
             name: c.name,
